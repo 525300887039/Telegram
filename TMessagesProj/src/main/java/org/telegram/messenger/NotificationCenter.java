@@ -42,6 +42,7 @@ public class NotificationCenter {
     public static final int changeRepliesCounter = totalEvents++;
     public static final int messagesDidLoad = totalEvents++;
     public static final int didLoadSponsoredMessages = totalEvents++;
+    public static final int adFreeSettingsChanged = totalEvents++;
     public static final int didLoadSendAsPeers = totalEvents++;
     public static final int updateDefaultSendAsPeer = totalEvents++;
     public static final int messagesDidLoadWithoutProcess = totalEvents++;

@@ -32,6 +32,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import org.telegram.messenger.AccountInstance;
+import org.telegram.messenger.AdFreeController;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ChatObject;
 import org.telegram.messenger.DialogObject;
@@ -1400,6 +1401,7 @@ public class SearchViewPager extends ViewPagerFixed implements FilteredSearchVie
         NotificationCenter.getInstance(currentAccount).addObserver(this, NotificationCenter.channelRecommendationsLoaded);
         NotificationCenter.getInstance(currentAccount).addObserver(this, NotificationCenter.dialogDeleted);
         NotificationCenter.getInstance(currentAccount).addObserver(this, NotificationCenter.dialogsNeedReload);
+        NotificationCenter.getInstance(currentAccount).addObserver(this, NotificationCenter.adFreeSettingsChanged);
         NotificationCenter.getInstance(currentAccount).addObserver(this, NotificationCenter.reloadWebappsHints);
         NotificationCenter.getInstance(currentAccount).addObserver(this, NotificationCenter.storiesListUpdated);
         attached = true;
@@ -1419,13 +1421,18 @@ public class SearchViewPager extends ViewPagerFixed implements FilteredSearchVie
         NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.channelRecommendationsLoaded);
         NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.dialogDeleted);
         NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.dialogsNeedReload);
+        NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.adFreeSettingsChanged);
         NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.reloadWebappsHints);
         NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.storiesListUpdated);
     }
 
     @Override
     public void didReceivedNotification(int id, int account, Object... args) {
-        if (id == NotificationCenter.channelRecommendationsLoaded) {
+        if (id == NotificationCenter.adFreeSettingsChanged) {
+            if (AdFreeController.isEnabled() && dialogsSearchAdapter != null) {
+                dialogsSearchAdapter.clearSponsoredPeers();
+            }
+        } else if (id == NotificationCenter.channelRecommendationsLoaded) {
             channelsEmptyView.showProgress(MessagesController.getInstance(currentAccount).getChannelRecommendations(0) != null, true);
             channelsSearchAdapter.updateMyChannels();
             channelsSearchAdapter.update(true);

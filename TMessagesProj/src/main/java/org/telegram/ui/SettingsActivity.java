@@ -64,6 +64,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.google.common.collect.Lists;
 
 import org.telegram.PhoneFormat.PhoneFormat;
+import org.telegram.messenger.AdFreeController;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.AuthTokensHelper;
@@ -154,6 +155,7 @@ import me.vkryl.android.animator.FactorAnimator;
 public class SettingsActivity extends BaseFragment implements NotificationCenter.NotificationCenterDelegate, ImageUpdater.ImageUpdaterDelegate, MainTabsActivity.TabFragmentDelegate, FactorAnimator.Target {
 
     private static final int ANIMATOR_ID_SEARCH_PAGE_VISIBLE = 0;
+    private static final int BUTTON_AD_FREE = 24;
 
     private final BoolAnimator animatorSearchPageVisible = new BoolAnimator(ANIMATOR_ID_SEARCH_PAGE_VISIBLE,
             this, CubicBezierInterpolator.EASE_OUT_QUINT, 350);
@@ -699,6 +701,9 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         items.add(SettingCell.Factory.of(10, IconBackgroundColors.PURPLE.top, IconBackgroundColors.PURPLE.bottom, R.drawable.settings_language, getString(R.string.SettingsLanguage), LocaleController.getCurrentLanguageName()));
 
         items.add(UItem.asShadow(null));
+        items.add(UItem.asHeader(getString(R.string.AdFreeSettingsHeader)));
+        items.add(UItem.asButtonCheck(BUTTON_AD_FREE, getString(R.string.AdFreeTitle), getString(R.string.AdFreeInfo)).setChecked(AdFreeController.isEnabled()));
+        items.add(UItem.asShadow(null));
 
         if (!getMessagesController().premiumFeaturesBlocked()) {
             items.add(SettingCell.Factory.of(11, 0xFFB659FF, 0xFF617CFF, R.drawable.settings_premium, getString(R.string.TelegramPremium)));
@@ -835,6 +840,12 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                 break;
             case 10:
                 presentSettingFragment(new LanguageSelectActivity());
+                break;
+            case BUTTON_AD_FREE:
+                AdFreeController.setEnabled(!AdFreeController.isEnabled());
+                if (listView != null) {
+                    listView.adapter.update(true);
+                }
                 break;
 
             case 11:

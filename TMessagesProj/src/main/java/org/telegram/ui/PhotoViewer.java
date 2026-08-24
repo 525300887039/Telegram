@@ -155,6 +155,7 @@ import com.google.android.gms.vision.Frame;
 import com.google.android.gms.vision.face.Face;
 import com.google.android.gms.vision.face.FaceDetector;
 import org.telegram.messenger.AccountInstance;
+import org.telegram.messenger.AdFreeController;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.AnimationNotificationsLocker;
 import org.telegram.messenger.ApplicationLoader;
@@ -15654,7 +15655,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
                     ads.stop();
                     ads = null;
                 }
-                if (newMessageObject != null) {
+                if (newMessageObject != null && !AdFreeController.isEnabled()) {
                     ads = VideoAds.make(newMessageObject.currentAccount, newMessageObject.getDialogId(), newMessageObject.getId(), BulletinFactory.of(containerView, resourcesProvider));
                     ads.setWaitingPaused(videoPlayer == null || videoPlayer.isPlaying() && videoPlayer.getPlaybackState() == ExoPlayer.STATE_READY);
                     ads.setPauseOnPopupCallback(() -> {

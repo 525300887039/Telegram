@@ -20,6 +20,7 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
+import org.telegram.messenger.AdFreeController;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ChatObject;
 import org.telegram.messenger.DialogObject;
@@ -245,6 +246,10 @@ public class ReportBottomSheet extends BottomSheet {
     }
 
     private void submitOption(final CharSequence optionText, final byte[] option, final String comment) {
+        if (sponsored && AdFreeController.isEnabled()) {
+            dismiss();
+            return;
+        }
         TLObject request;
         if (sponsored) {
             TLRPC.TL_messages_reportSponsoredMessage req = new TLRPC.TL_messages_reportSponsoredMessage();
@@ -944,7 +949,7 @@ public class ReportBottomSheet extends BottomSheet {
         MessageObject message,
         Theme.ResourcesProvider resourceProvider
     ) {
-        if (fragment == null) return;
+        if (AdFreeController.isEnabled() || fragment == null || message == null) return;
         final int currentAccount = fragment.getCurrentAccount();
         final Context context = fragment.getContext();
         final long dialogId = fragment.getDialogId();
@@ -954,9 +959,11 @@ public class ReportBottomSheet extends BottomSheet {
         final byte[] sponsoredId = req.random_id = message.sponsoredId;
         req.option = new byte[]{};
         ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> {
+            if (AdFreeController.isEnabled()) return;
             if (response != null) {
                 if (response instanceof TLRPC.TL_channels_sponsoredMessageReportResultChooseOption) {
                     AndroidUtilities.runOnUIThread(() -> {
+                        if (AdFreeController.isEnabled()) return;
                         TLRPC.TL_channels_sponsoredMessageReportResultChooseOption result = (TLRPC.TL_channels_sponsoredMessageReportResultChooseOption) response;
                         new ReportBottomSheet(context, resourceProvider, dialogId, sponsoredId)
                             .setReportChooseOption(result)
@@ -1060,15 +1067,17 @@ public class ReportBottomSheet extends BottomSheet {
 //        final int currentAccount = fragment.getCurrentAccount();
 //        final Context context = fragment.getContext();
 //        final long dialogId = fragment.getDialogId();
-        if (context == null) return;
+        if (AdFreeController.isEnabled() || context == null || ad == null) return;
 
         TLRPC.TL_messages_reportSponsoredMessage req = new TLRPC.TL_messages_reportSponsoredMessage();
         final byte[] sponsoredId = req.random_id = ad.random_id;
         req.option = new byte[]{};
         ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> {
+            if (AdFreeController.isEnabled()) return;
             if (response != null) {
                 if (response instanceof TLRPC.TL_channels_sponsoredMessageReportResultChooseOption) {
                     AndroidUtilities.runOnUIThread(() -> {
+                        if (AdFreeController.isEnabled()) return;
                         TLRPC.TL_channels_sponsoredMessageReportResultChooseOption result = (TLRPC.TL_channels_sponsoredMessageReportResultChooseOption) response;
                         new ReportBottomSheet(context, resourceProvider, dialogId, sponsoredId)
                             .setReportChooseOption(result)
@@ -1179,7 +1188,7 @@ public class ReportBottomSheet extends BottomSheet {
         Theme.ResourcesProvider resourceProvider,
         Runnable remove
     ) {
-        if (fragment == null) return;
+        if (AdFreeController.isEnabled() || fragment == null || random_id == null) return;
         final int currentAccount = fragment.getCurrentAccount();
         final Context context = fragment.getContext();
         if (context == null) return;
@@ -1188,9 +1197,11 @@ public class ReportBottomSheet extends BottomSheet {
         final byte[] sponsoredId = req.random_id = random_id;
         req.option = new byte[]{};
         ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> {
+            if (AdFreeController.isEnabled()) return;
             if (response != null) {
                 if (response instanceof TLRPC.TL_channels_sponsoredMessageReportResultChooseOption) {
                     AndroidUtilities.runOnUIThread(() -> {
+                        if (AdFreeController.isEnabled()) return;
                         TLRPC.TL_channels_sponsoredMessageReportResultChooseOption result = (TLRPC.TL_channels_sponsoredMessageReportResultChooseOption) response;
                         new ReportBottomSheet(context, resourceProvider, 0, sponsoredId)
                             .setReportChooseOption(result)

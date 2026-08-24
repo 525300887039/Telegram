@@ -1108,6 +1108,7 @@ public class MessagesController extends BaseController implements NotificationCe
         public Integer posts_between;
         public long loadTime;
         public boolean loading;
+        public int requestId;
     }
 
     private class SendAsPeersInfo {
@@ -21610,6 +21611,10 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public SponsoredMessagesInfo getSponsoredMessages(long dialogId) {
+        if (AdFreeController.isEnabled()) {
+            clearSponsoredMessages(dialogId);
+            return null;
+        }
         SponsoredMessagesInfo info = sponsoredMessages.get(dialogId);
         if (info != null && (info.loading || Math.abs(SystemClock.elapsedRealtime() - info.loadTime) <= 5 * 60 * 1000)) {
             return info;
@@ -21623,7 +21628,10 @@ public class MessagesController extends BaseController implements NotificationCe
         SponsoredMessagesInfo infoFinal = info;
         TLRPC.TL_messages_getSponsoredMessages req = new TLRPC.TL_messages_getSponsoredMessages();
         req.peer = getInputPeer(dialogId);
-        getConnectionsManager().sendRequest(req, (response, error) -> {
+        infoFinal.requestId = getConnectionsManager().sendRequest(req, (response, error) -> {
+            if (AdFreeController.isEnabled()) {
+                return;
+            }
             ArrayList<MessageObject> result;
             Integer posts_between;
             if (response instanceof TLRPC.messages_SponsoredMessages) {
@@ -21694,6 +21702,10 @@ public class MessagesController extends BaseController implements NotificationCe
                 posts_between = null;
             }
             AndroidUtilities.runOnUIThread(() -> {
+                if (AdFreeController.isEnabled() || sponsoredMessages.get(dialogId) != infoFinal) {
+                    return;
+                }
+                infoFinal.requestId = 0;
                 if (result == null) {
                     sponsoredMessages.remove(dialogId);
                 } else {
@@ -21706,6 +21718,24 @@ public class MessagesController extends BaseController implements NotificationCe
             });
         });
         return null;
+    }
+
+    private void clearSponsoredMessages(long dialogId) {
+        SponsoredMessagesInfo info = sponsoredMessages.get(dialogId);
+        if (info != null && info.requestId != 0) {
+            getConnectionsManager().cancelRequest(info.requestId, true);
+        }
+        sponsoredMessages.remove(dialogId);
+    }
+
+    public void clearSponsoredMessages() {
+        for (int i = 0; i < sponsoredMessages.size(); i++) {
+            SponsoredMessagesInfo info = sponsoredMessages.valueAt(i);
+            if (info != null && info.requestId != 0) {
+                getConnectionsManager().cancelRequest(info.requestId, true);
+            }
+        }
+        sponsoredMessages.clear();
     }
 
     public void clearSendAsPeers() {

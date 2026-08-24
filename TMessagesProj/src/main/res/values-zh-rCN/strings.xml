@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="AdFreeSettingsHeader">自定义功能</string>
+    <string name="AdFreeTitle">免广告</string>
+    <string name="AdFreeInfo">隐藏 Telegram 官方赞助消息、视频广告和搜索推广。</string>
     <string name="ReactionRankMenu">表情回应排行</string>
     <string name="ReactionRankTitle">表情回应排行</string>
     <string name="ReactionRankFilterTitle">排行筛选</string>

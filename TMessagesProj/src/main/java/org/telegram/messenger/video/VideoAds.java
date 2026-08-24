@@ -33,6 +33,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import org.aspectj.lang.annotation.AdviceName;
+import org.telegram.messenger.AdFreeController;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.BuildVars;
@@ -112,6 +113,9 @@ public class VideoAds {
     private static HashMap<VideoAdsLocation, VideoAds> cached = new HashMap<>();
 
     public static void dropCache() {
+        for (VideoAds videoAds : new ArrayList<>(cached.values())) {
+            videoAds.clearForAdFree();
+        }
         cached.clear();
     }
 
@@ -163,6 +167,10 @@ public class VideoAds {
 
     private void init(BulletinFactory bulletinFactory) {
         this.bulletinFactory = bulletinFactory;
+        if (AdFreeController.isEnabled()) {
+            clearForAdFree();
+            return;
+        }
         if (currentBulletinPassedTime <= 0) {
             this.lastTime = System.currentTimeMillis();
             if (waitingPaused) {
@@ -180,7 +188,7 @@ public class VideoAds {
     private int requestId;
     private boolean loading, loaded;
     private void load() {
-        if (loading || loaded) return;
+        if (AdFreeController.isEnabled() || loading || loaded) return;
 
         if (UserConfig.getInstance(currentAccount).isPremium() && MessagesController.getInstance(currentAccount).isSponsoredDisabled()) {
             return;
@@ -193,7 +201,12 @@ public class VideoAds {
         req.flags |= 1;
         req.msg_id = msg_id;
         requestId = ConnectionsManager.getInstance(currentAccount).sendRequest(req, (res, err) -> AndroidUtilities.runOnUIThread(() -> {
-            if (!loading) return;
+            if (!loading || AdFreeController.isEnabled()) {
+                loading = false;
+                requestId = 0;
+                ads.clear();
+                return;
+            }
 
             if (res instanceof TLRPC.TL_messages_sponsoredMessages) {
                 final TLRPC.TL_messages_sponsoredMessages r = (TLRPC.TL_messages_sponsoredMessages) res;
@@ -206,6 +219,7 @@ public class VideoAds {
 
             loaded = true;
             loading = false;
+            requestId = 0;
 
             schedule();
         }));
@@ -213,7 +227,7 @@ public class VideoAds {
 
     private void schedule() {
         AndroidUtilities.cancelRunOnUIThread(showRunnable);
-        if (!loaded || ads.isEmpty()) return;
+        if (AdFreeController.isEnabled() || !loaded || ads.isEmpty()) return;
         final int delay = first ? start_delay : between_delay;
         final long timePassed = System.currentTimeMillis() - lastTime;
         AndroidUtilities.runOnUIThread(showRunnable, Math.max(0, delay * 1000L - timePassed));
@@ -245,7 +259,7 @@ public class VideoAds {
     private float currentMenuTranslationY;
 
     private void show() {
-        if (ads.isEmpty()) return;
+        if (AdFreeController.isEnabled() || ads.isEmpty()) return;
         final TLRPC.TL_sponsoredMessage ad = ads.get(0);
         final long showTime = System.currentTimeMillis() - currentBulletinPassedTime;
         bulletinShowTime = showTime;
@@ -580,6 +594,19 @@ public class VideoAds {
         setWaitingPaused(true);
     }
 
+    private void clearForAdFree() {
+        stop();
+        if (premiumSheet != null) {
+            premiumSheet.dismiss();
+            premiumSheet = null;
+            checkPopupShownCallback();
+        }
+        ads.clear();
+        loaded = true;
+        first = true;
+        currentBulletinPassedTime = 0;
+    }
+
     public static class AdOptionsDrawable extends Drawable {
 
         public final int color;
@@ -851,7 +878,7 @@ public class VideoAds {
     }
 
     public void logSponsoredShown(TLRPC.TL_sponsoredMessage ad) {
-        if (ad == null) return;
+        if (AdFreeController.isEnabled() || ad == null) return;
         final TLRPC.TL_messages_viewSponsoredMessage req = new TLRPC.TL_messages_viewSponsoredMessage();
         req.random_id = ad.random_id;
         if (!BuildVars.DEBUG_PRIVATE_VERSION) {
@@ -860,7 +887,7 @@ public class VideoAds {
     }
 
     public void logSponsoredClicked(TLRPC.TL_sponsoredMessage ad) {
-        if (ad == null) return;
+        if (AdFreeController.isEnabled() || ad == null) return;
         final TLRPC.TL_messages_clickSponsoredMessage req = new TLRPC.TL_messages_clickSponsoredMessage();
         req.random_id = ad.random_id;
         req.media = false;

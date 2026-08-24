@@ -135,6 +135,7 @@ import com.google.zxing.common.detector.MathUtils;
 
 import org.telegram.PhoneFormat.PhoneFormat;
 import org.telegram.messenger.AccountInstance;
+import org.telegram.messenger.AdFreeController;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.BotForumHelper;
@@ -2915,6 +2916,7 @@ public class ChatActivity extends BaseFragment implements
             observersGroup.add(NotificationCenter.didLoadSponsoredMessages);
         }
         observersGroup
+            .add(NotificationCenter.adFreeSettingsChanged)
             .add(NotificationCenter.updatedChatRanks)
             .add(NotificationCenter.premiumFloodWaitReceived)
             .add(NotificationCenter.messagesDidLoad)
@@ -20488,7 +20490,13 @@ public class ChatActivity extends BaseFragment implements
 
     @Override
     public void didReceivedNotification(int id, int account, final Object... args) {
-        if (id == NotificationCenter.messagesDidLoad) {
+        if (id == NotificationCenter.adFreeSettingsChanged) {
+            if (AdFreeController.isEnabled()) {
+                clearSponsoredMessagesFromUi();
+            } else {
+                sponsoredMessagesAdded = false;
+            }
+        } else if (id == NotificationCenter.messagesDidLoad) {
             didReceivedNotification_messagesDidLoad(id, account, args);
         } else {
             didReceivedNotification2(id, account, args);
@@ -24906,7 +24914,7 @@ public class ChatActivity extends BaseFragment implements
     private Pattern sponsoredUrlPattern;
     private MessageObject botSponsoredMessage;
     private void addSponsoredMessages(boolean animated) {
-        if (sponsoredMessagesAdded || chatMode != 0 || !ChatObject.isChannel(currentChat) && !UserObject.isBot(currentUser) || !forwardEndReached[0] || getUserConfig().isPremium() && getMessagesController().isSponsoredDisabled() || isReport()) {
+        if (AdFreeController.isEnabled() || sponsoredMessagesAdded || chatMode != 0 || !ChatObject.isChannel(currentChat) && !UserObject.isBot(currentUser) || !forwardEndReached[0] || getUserConfig().isPremium() && getMessagesController().isSponsoredDisabled() || isReport()) {
             return;
         }
         MessagesController.SponsoredMessagesInfo res = getMessagesController().getSponsoredMessages(dialog_id);
@@ -24955,6 +24963,36 @@ public class ChatActivity extends BaseFragment implements
                 notPushedSponsoredMessages.clear();
             }
             processNewMessages(res.messages, false);
+        }
+    }
+
+    private void clearSponsoredMessagesFromUi() {
+        sponsoredMessagesAdded = true;
+        sponsoredMessagesPostsBetween = 0;
+        botSponsoredMessage = null;
+        if (notPushedSponsoredMessages != null) {
+            notPushedSponsoredMessages.clear();
+        }
+
+        boolean changed = false;
+        for (int i = messages.size() - 1; i >= 0; i--) {
+            MessageObject messageObject = messages.get(i);
+            if (!messageObject.isSponsored()) {
+                continue;
+            }
+            messages.remove(i);
+            messagesDict[0].remove(messageObject.getId());
+            for (ArrayList<MessageObject> dayMessages : messagesByDays.values()) {
+                dayMessages.remove(messageObject);
+            }
+            changed = true;
+        }
+
+        if (changed && chatAdapter != null) {
+            chatAdapter.notifyDataSetChanged(false);
+        }
+        if (fragmentView != null) {
+            updateTopPanel(true);
         }
     }
 
@@ -29102,7 +29140,7 @@ public class ChatActivity extends BaseFragment implements
         ) || DEBUG_TOP_PANELS;
         boolean showAddProfilePicture = UserObject.isBot(currentUser) && currentUser.bot_can_edit && currentUser.photo == null;
         boolean showBizBot = currentEncryptedChat == null && getUserConfig().isPremium() && preferences.getLong("dialog_botid" + did, 0) != 0 || DEBUG_TOP_PANELS;
-        boolean showBotAd = currentUser != null && currentUser.bot && messages.size() >= 2 && botSponsoredMessage != null;
+        boolean showBotAd = !AdFreeController.isEnabled() && currentUser != null && currentUser.bot && messages.size() >= 2 && botSponsoredMessage != null;
         if (showRestartTopic) {
             shownRestartTopic = true;
         }
@@ -36500,7 +36538,7 @@ public class ChatActivity extends BaseFragment implements
     }
 
     public void logSponsoredClicked(MessageObject messageObject, boolean media, boolean fullscreen) {
-        if (messageObject == null || !messageObject.isSponsored()) {
+        if (AdFreeController.isEnabled() || messageObject == null || !messageObject.isSponsored()) {
             return;
         }
         TLRPC.TL_messages_clickSponsoredMessage req = new TLRPC.TL_messages_clickSponsoredMessage();
@@ -36721,7 +36759,7 @@ public class ChatActivity extends BaseFragment implements
     }
 
     private void markSponsoredAsRead(MessageObject object) {
-        if (object == null) {
+        if (AdFreeController.isEnabled() || object == null) {
             return;
         }
         if (!object.isSponsored() || object.viewsReloaded) {

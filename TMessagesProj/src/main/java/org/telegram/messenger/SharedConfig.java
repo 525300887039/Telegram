@@ -263,6 +263,7 @@ public class SharedConfig {
     public static boolean useSurfaceInStories;
     public static boolean photoViewerBlur = true;
     public static boolean payByInvoice;
+    public static volatile boolean adFreeEnabled = true;
     public static int stealthModeSendMessageConfirm = 2;
     private static int lastLocalId = -210000;
 
@@ -668,6 +669,7 @@ public class SharedConfig {
             useSurfaceInStories = preferences.getBoolean("useSurfaceInStories", Build.VERSION.SDK_INT >= 30);
             payByInvoice = preferences.getBoolean("payByInvoice", false);
             photoViewerBlur = preferences.getBoolean("photoViewerBlur", true);
+            adFreeEnabled = preferences.getBoolean("adFreeEnabled", true);
             multipleReactionsPromoShowed = preferences.getBoolean("multipleReactionsPromoShowed", false);
             callEncryptionHintDisplayedCount = preferences.getInt("callEncryptionHintDisplayedCount", 0);
             debugVideoQualities = preferences.getBoolean("debugVideoQualities", false);
@@ -1032,6 +1034,14 @@ public class SharedConfig {
         SharedPreferences.Editor editor = preferences.edit();
         editor.putBoolean("updateStickersOrderOnSend", updateStickersOrderOnSend = !updateStickersOrderOnSend);
         editor.apply();
+    }
+
+    public static void setAdFreeEnabled(boolean enabled) {
+        if (adFreeEnabled == enabled) {
+            return;
+        }
+        adFreeEnabled = enabled;
+        MessagesController.getGlobalMainSettings().edit().putBoolean("adFreeEnabled", enabled).apply();
     }
 
     public static void checkLogsToDelete() {

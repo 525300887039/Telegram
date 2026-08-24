@@ -3,6 +3,14 @@
     <string name="AdFreeSettingsHeader">自定义功能</string>
     <string name="AdFreeTitle">免广告</string>
     <string name="AdFreeInfo">隐藏 Telegram 官方赞助消息、视频广告和搜索推广。</string>
+    <string name="DownloadSpeedBoostTitle">下载加速</string>
+    <string name="DownloadSpeedBoostModeOff">关闭</string>
+    <string name="DownloadSpeedBoostModeAverage">加速</string>
+    <string name="DownloadSpeedBoostModeExtreme">极限</string>
+    <string name="DownloadSpeedBoostOptionOff">关闭（跟随官方）</string>
+    <string name="DownloadSpeedBoostOptionAverage">加速（推荐，512 KiB × 8）</string>
+    <string name="DownloadSpeedBoostOptionExtreme">极限（1 MiB × 12）</string>
+    <string name="DownloadSpeedBoostInfo">提高客户端的下载分片大小和并发请求数，不能解除 Telegram 服务端限速。极限模式会增加耗电和内存占用；设置对新下载或取消后重新下载的任务生效。</string>
     <string name="ReactionRankMenu">表情回应排行</string>
     <string name="ReactionRankTitle">表情回应排行</string>
     <string name="ReactionRankFilterTitle">排行筛选</string>

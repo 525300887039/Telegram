@@ -156,6 +156,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
 
     private static final int ANIMATOR_ID_SEARCH_PAGE_VISIBLE = 0;
     private static final int BUTTON_AD_FREE = 24;
+    private static final int BUTTON_DOWNLOAD_SPEED_BOOST = 25;
 
     private final BoolAnimator animatorSearchPageVisible = new BoolAnimator(ANIMATOR_ID_SEARCH_PAGE_VISIBLE,
             this, CubicBezierInterpolator.EASE_OUT_QUINT, 350);
@@ -703,7 +704,8 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         items.add(UItem.asShadow(null));
         items.add(UItem.asHeader(getString(R.string.AdFreeSettingsHeader)));
         items.add(UItem.asButtonCheck(BUTTON_AD_FREE, getString(R.string.AdFreeTitle), getString(R.string.AdFreeInfo)).setChecked(AdFreeController.isEnabled()));
-        items.add(UItem.asShadow(null));
+        items.add(UItem.asButton(BUTTON_DOWNLOAD_SPEED_BOOST, getString(R.string.DownloadSpeedBoostTitle), getDownloadSpeedBoostModeName()));
+        items.add(UItem.asShadow(getString(R.string.DownloadSpeedBoostInfo)));
 
         if (!getMessagesController().premiumFeaturesBlocked()) {
             items.add(SettingCell.Factory.of(11, 0xFFB659FF, 0xFF617CFF, R.drawable.settings_premium, getString(R.string.TelegramPremium)));
@@ -772,6 +774,53 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         } else {
             presentFragment(fragment);
         }
+    }
+
+    private String getDownloadSpeedBoostModeName() {
+        switch (SharedConfig.downloadSpeedBoostMode) {
+            case SharedConfig.DOWNLOAD_SPEED_BOOST_AVERAGE:
+                return getString(R.string.DownloadSpeedBoostModeAverage);
+            case SharedConfig.DOWNLOAD_SPEED_BOOST_EXTREME:
+                return getString(R.string.DownloadSpeedBoostModeExtreme);
+            default:
+                return getString(R.string.DownloadSpeedBoostModeOff);
+        }
+    }
+
+    private CharSequence getDownloadSpeedBoostOption(int mode, int stringResId) {
+        String option = getString(stringResId);
+        if (SharedConfig.downloadSpeedBoostMode == mode) {
+            return AndroidUtilities.replaceTags("**" + option + "**");
+        }
+        return option;
+    }
+
+    private void showDownloadSpeedBoostDialog() {
+        if (getParentActivity() == null) {
+            return;
+        }
+        CharSequence[] options = new CharSequence[]{
+                getDownloadSpeedBoostOption(SharedConfig.DOWNLOAD_SPEED_BOOST_NONE, R.string.DownloadSpeedBoostOptionOff),
+                getDownloadSpeedBoostOption(SharedConfig.DOWNLOAD_SPEED_BOOST_AVERAGE, R.string.DownloadSpeedBoostOptionAverage),
+                getDownloadSpeedBoostOption(SharedConfig.DOWNLOAD_SPEED_BOOST_EXTREME, R.string.DownloadSpeedBoostOptionExtreme)
+        };
+        AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity(), resourceProvider);
+        builder.setTitle(getString(R.string.DownloadSpeedBoostTitle));
+        builder.setItems(options, (dialog, which) -> {
+            int mode;
+            if (which == 1) {
+                mode = SharedConfig.DOWNLOAD_SPEED_BOOST_AVERAGE;
+            } else if (which == 2) {
+                mode = SharedConfig.DOWNLOAD_SPEED_BOOST_EXTREME;
+            } else {
+                mode = SharedConfig.DOWNLOAD_SPEED_BOOST_NONE;
+            }
+            SharedConfig.setDownloadSpeedBoostMode(mode);
+            if (listView != null) {
+                listView.adapter.update(true);
+            }
+        });
+        showDialog(builder.create());
     }
 
     private void onClick(UItem item, View view, int position, float x, float y) {
@@ -846,6 +895,9 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                 if (listView != null) {
                     listView.adapter.update(true);
                 }
+                break;
+            case BUTTON_DOWNLOAD_SPEED_BOOST:
+                showDownloadSpeedBoostDialog();
                 break;
 
             case 11:

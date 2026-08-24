@@ -286,15 +286,25 @@ public class FileLoadOperation {
     }
 
     private void updateParams() {
-        if ((preloadPrefixSize > 0 || MessagesController.getInstance(currentAccount).getfileExperimentalParams) && !forceSmallChunk) {
-            downloadChunkSizeBig = 1024 * 512;
-            maxDownloadRequests = 8;
-            maxDownloadRequestsBig = 8;
+        int downloadSpeedBoostMode = SharedConfig.downloadSpeedBoostMode;
+        if (forceSmallChunk) {
+            applyDownloadParams(1024 * 128, 4);
+        } else if (preloadPrefixSize > 0) {
+            applyDownloadParams(1024 * 512, 8);
+        } else if (downloadSpeedBoostMode == SharedConfig.DOWNLOAD_SPEED_BOOST_EXTREME) {
+            applyDownloadParams(1024 * 1024, 12);
+        } else if (downloadSpeedBoostMode == SharedConfig.DOWNLOAD_SPEED_BOOST_AVERAGE
+                || MessagesController.getInstance(currentAccount).getfileExperimentalParams) {
+            applyDownloadParams(1024 * 512, 8);
         } else {
-            downloadChunkSizeBig = 1024 * 128;
-            maxDownloadRequests = 4;
-            maxDownloadRequestsBig = 4;
+            applyDownloadParams(1024 * 128, 4);
         }
+    }
+
+    private void applyDownloadParams(int bigChunkSize, int maxRequests) {
+        downloadChunkSizeBig = bigChunkSize;
+        maxDownloadRequests = maxRequests;
+        maxDownloadRequestsBig = maxRequests;
         maxCdnParts = (int) (FileLoader.DEFAULT_MAX_FILE_SIZE / downloadChunkSizeBig);
     }
 

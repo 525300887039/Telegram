@@ -264,6 +264,10 @@ public class SharedConfig {
     public static boolean photoViewerBlur = true;
     public static boolean payByInvoice;
     public static volatile boolean adFreeEnabled = true;
+    public static final int DOWNLOAD_SPEED_BOOST_NONE = 0;
+    public static final int DOWNLOAD_SPEED_BOOST_AVERAGE = 1;
+    public static final int DOWNLOAD_SPEED_BOOST_EXTREME = 2;
+    public static volatile int downloadSpeedBoostMode = DOWNLOAD_SPEED_BOOST_NONE;
     public static int stealthModeSendMessageConfirm = 2;
     private static int lastLocalId = -210000;
 
@@ -670,6 +674,7 @@ public class SharedConfig {
             payByInvoice = preferences.getBoolean("payByInvoice", false);
             photoViewerBlur = preferences.getBoolean("photoViewerBlur", true);
             adFreeEnabled = preferences.getBoolean("adFreeEnabled", true);
+            downloadSpeedBoostMode = normalizeDownloadSpeedBoostMode(preferences.getInt("downloadSpeedBoostMode", DOWNLOAD_SPEED_BOOST_NONE));
             multipleReactionsPromoShowed = preferences.getBoolean("multipleReactionsPromoShowed", false);
             callEncryptionHintDisplayedCount = preferences.getInt("callEncryptionHintDisplayedCount", 0);
             debugVideoQualities = preferences.getBoolean("debugVideoQualities", false);
@@ -1042,6 +1047,22 @@ public class SharedConfig {
         }
         adFreeEnabled = enabled;
         MessagesController.getGlobalMainSettings().edit().putBoolean("adFreeEnabled", enabled).apply();
+    }
+
+    public static void setDownloadSpeedBoostMode(int mode) {
+        mode = normalizeDownloadSpeedBoostMode(mode);
+        if (downloadSpeedBoostMode == mode) {
+            return;
+        }
+        downloadSpeedBoostMode = mode;
+        MessagesController.getGlobalMainSettings().edit().putInt("downloadSpeedBoostMode", mode).apply();
+    }
+
+    private static int normalizeDownloadSpeedBoostMode(int mode) {
+        if (mode < DOWNLOAD_SPEED_BOOST_NONE || mode > DOWNLOAD_SPEED_BOOST_EXTREME) {
+            return DOWNLOAD_SPEED_BOOST_NONE;
+        }
+        return mode;
     }
 
     public static void checkLogsToDelete() {

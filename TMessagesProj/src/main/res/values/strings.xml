@@ -11225,6 +11225,14 @@
     <string name="AdFreeSettingsHeader">Customization</string>
     <string name="AdFreeTitle">Ad-free mode</string>
     <string name="AdFreeInfo">Hide Telegram sponsored messages, video ads, and sponsored search results.</string>
+    <string name="DownloadSpeedBoostTitle">Download acceleration</string>
+    <string name="DownloadSpeedBoostModeOff">Off</string>
+    <string name="DownloadSpeedBoostModeAverage">Accelerated</string>
+    <string name="DownloadSpeedBoostModeExtreme">Extreme</string>
+    <string name="DownloadSpeedBoostOptionOff">Off (follow official behavior)</string>
+    <string name="DownloadSpeedBoostOptionAverage">Accelerated (recommended, 512 KiB × 8)</string>
+    <string name="DownloadSpeedBoostOptionExtreme">Extreme (1 MiB × 12)</string>
+    <string name="DownloadSpeedBoostInfo">Increases client-side download chunk size and parallel requests. It cannot remove Telegram server-side limits. Extreme mode uses more battery and memory. Changes apply to new downloads or files downloaded again after cancellation.</string>
 
     <string name="ReactionRankMenu">Reaction ranking</string>
     <string name="ReactionRankTitle">Reaction ranking</string>

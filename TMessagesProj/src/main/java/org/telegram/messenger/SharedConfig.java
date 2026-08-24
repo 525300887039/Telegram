@@ -268,6 +268,13 @@ public class SharedConfig {
     public static final int DOWNLOAD_SPEED_BOOST_AVERAGE = 1;
     public static final int DOWNLOAD_SPEED_BOOST_EXTREME = 2;
     public static volatile int downloadSpeedBoostMode = DOWNLOAD_SPEED_BOOST_NONE;
+    public static volatile boolean antiDeleteEnabled;
+    public static volatile boolean keepDeletedMediaEnabled;
+    public static volatile boolean repeatViewOnceEnabled;
+    public static volatile boolean protectedContentCopySaveEnabled;
+    public static volatile boolean protectedContentSendCopyEnabled;
+    public static volatile boolean disableFlagSecureEnabled;
+    public static volatile int localArchiveRetentionDays = 30;
     public static int stealthModeSendMessageConfirm = 2;
     private static int lastLocalId = -210000;
 
@@ -675,6 +682,13 @@ public class SharedConfig {
             photoViewerBlur = preferences.getBoolean("photoViewerBlur", true);
             adFreeEnabled = preferences.getBoolean("adFreeEnabled", true);
             downloadSpeedBoostMode = normalizeDownloadSpeedBoostMode(preferences.getInt("downloadSpeedBoostMode", DOWNLOAD_SPEED_BOOST_NONE));
+            antiDeleteEnabled = preferences.getBoolean("antiDeleteEnabled", false);
+            keepDeletedMediaEnabled = preferences.getBoolean("keepDeletedMediaEnabled", false);
+            repeatViewOnceEnabled = preferences.getBoolean("repeatViewOnceEnabled", false);
+            protectedContentCopySaveEnabled = preferences.getBoolean("protectedContentCopySaveEnabled", false);
+            protectedContentSendCopyEnabled = preferences.getBoolean("protectedContentSendCopyEnabled", false);
+            disableFlagSecureEnabled = preferences.getBoolean("disableFlagSecureEnabled", false);
+            localArchiveRetentionDays = Math.max(0, preferences.getInt("localArchiveRetentionDays", 30));
             multipleReactionsPromoShowed = preferences.getBoolean("multipleReactionsPromoShowed", false);
             callEncryptionHintDisplayedCount = preferences.getInt("callEncryptionHintDisplayedCount", 0);
             debugVideoQualities = preferences.getBoolean("debugVideoQualities", false);
@@ -1063,6 +1077,44 @@ public class SharedConfig {
             return DOWNLOAD_SPEED_BOOST_NONE;
         }
         return mode;
+    }
+
+    public static void setAntiDeleteEnabled(boolean enabled) {
+        antiDeleteEnabled = enabled;
+        MessagesController.getGlobalMainSettings().edit().putBoolean("antiDeleteEnabled", enabled).apply();
+    }
+
+    public static void setKeepDeletedMediaEnabled(boolean enabled) {
+        keepDeletedMediaEnabled = enabled;
+        MessagesController.getGlobalMainSettings().edit().putBoolean("keepDeletedMediaEnabled", enabled).apply();
+    }
+
+    public static void setRepeatViewOnceEnabled(boolean enabled) {
+        repeatViewOnceEnabled = enabled;
+        MessagesController.getGlobalMainSettings().edit().putBoolean("repeatViewOnceEnabled", enabled).apply();
+    }
+
+    public static void setProtectedContentCopySaveEnabled(boolean enabled) {
+        protectedContentCopySaveEnabled = enabled;
+        MessagesController.getGlobalMainSettings().edit().putBoolean("protectedContentCopySaveEnabled", enabled).apply();
+    }
+
+    public static void setProtectedContentSendCopyEnabled(boolean enabled) {
+        protectedContentSendCopyEnabled = enabled;
+        MessagesController.getGlobalMainSettings().edit().putBoolean("protectedContentSendCopyEnabled", enabled).apply();
+    }
+
+    public static void setDisableFlagSecureEnabled(boolean enabled) {
+        disableFlagSecureEnabled = enabled;
+        MessagesController.getGlobalMainSettings().edit().putBoolean("disableFlagSecureEnabled", enabled).apply();
+    }
+
+    public static void setLocalArchiveRetentionDays(int days) {
+        localArchiveRetentionDays = Math.max(0, days);
+        MessagesController.getGlobalMainSettings().edit().putInt("localArchiveRetentionDays", localArchiveRetentionDays).apply();
+        for (int account = 0; account < UserConfig.MAX_ACCOUNT_COUNT; account++) {
+            LocalMessageArchive.getInstance(account).cleanupExpiredAsync();
+        }
     }
 
     public static void checkLogsToDelete() {

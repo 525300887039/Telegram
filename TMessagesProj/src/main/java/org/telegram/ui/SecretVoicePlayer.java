@@ -49,6 +49,7 @@ import org.telegram.messenger.FileLoader;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MessageObject;
+import org.telegram.messenger.PrivacyControls;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
@@ -238,7 +239,7 @@ public class SecretVoicePlayer extends Dialog {
             WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR |
             WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS |
             WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION;
-        if (!BuildVars.DEBUG_PRIVATE_VERSION) {
+        if (!BuildVars.DEBUG_PRIVATE_VERSION && !SharedConfig.disableFlagSecureEnabled) {
             params.flags |= WindowManager.LayoutParams.FLAG_SECURE;
             AndroidUtilities.logFlagSecure();
         }
@@ -674,7 +675,7 @@ public class SecretVoicePlayer extends Dialog {
         }
         closeButton.setPadding(dp(12), dp(6), dp(12), dp(6));
         ScaleStateListAnimator.apply(closeButton);
-        closeButton.setText(LocaleController.getString(isOut ? R.string.VoiceOnceClose : R.string.VoiceOnceDeleteClose));
+        closeButton.setText(LocaleController.getString(isOut || PrivacyControls.canRepeatViewOnce(messageObject) ? R.string.VoiceOnceClose : R.string.VoiceOnceDeleteClose));
         closeButton.setOnClickListener(v -> {
             dismiss();
         });
@@ -742,7 +743,7 @@ public class SecretVoicePlayer extends Dialog {
             backDialog = null;
             return;
         }
-        if (!dismissing && messageObject != null && !messageObject.isOutOwner()) {
+        if (!dismissing && messageObject != null && !messageObject.isOutOwner() && !PrivacyControls.canRepeatViewOnce(messageObject)) {
             backDialog = new AlertDialog.Builder(getContext(), resourcesProvider)
                     .setTitle(LocaleController.getString(isRound ? R.string.VideoOnceCloseTitle : R.string.VoiceOnceCloseTitle))
                     .setMessage(LocaleController.getString(isRound ? R.string.VideoOnceCloseMessage : R.string.VoiceOnceCloseMessage))

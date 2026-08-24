@@ -77,6 +77,7 @@ import org.telegram.messenger.FileLog;
 import org.telegram.messenger.ImageLoader;
 import org.telegram.messenger.ImageLocation;
 import org.telegram.messenger.LiteMode;
+import org.telegram.messenger.LocalMessageArchive;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessagesController;
@@ -157,6 +158,14 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
     private static final int ANIMATOR_ID_SEARCH_PAGE_VISIBLE = 0;
     private static final int BUTTON_AD_FREE = 24;
     private static final int BUTTON_DOWNLOAD_SPEED_BOOST = 25;
+    private static final int BUTTON_ANTI_DELETE = 26;
+    private static final int BUTTON_KEEP_DELETED_MEDIA = 27;
+    private static final int BUTTON_REPEAT_VIEW_ONCE = 28;
+    private static final int BUTTON_PROTECTED_COPY_SAVE = 29;
+    private static final int BUTTON_PROTECTED_SEND_COPY = 30;
+    private static final int BUTTON_ARCHIVE_RETENTION = 31;
+    private static final int BUTTON_CLEAR_ARCHIVE = 32;
+    private static final int BUTTON_DISABLE_FLAG_SECURE = 33;
 
     private final BoolAnimator animatorSearchPageVisible = new BoolAnimator(ANIMATOR_ID_SEARCH_PAGE_VISIBLE,
             this, CubicBezierInterpolator.EASE_OUT_QUINT, 350);
@@ -707,6 +716,17 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         items.add(UItem.asButton(BUTTON_DOWNLOAD_SPEED_BOOST, getString(R.string.DownloadSpeedBoostTitle), getDownloadSpeedBoostModeName()));
         items.add(UItem.asShadow(getString(R.string.DownloadSpeedBoostInfo)));
 
+        items.add(UItem.asHeader(getString(R.string.PrivacyControlsHeader)));
+        items.add(UItem.asButtonCheck(BUTTON_ANTI_DELETE, getString(R.string.AntiDeleteTitle), getString(R.string.AntiDeleteInfo)).setChecked(SharedConfig.antiDeleteEnabled));
+        items.add(UItem.asButtonCheck(BUTTON_KEEP_DELETED_MEDIA, getString(R.string.KeepDeletedMediaTitle), getString(R.string.KeepDeletedMediaInfo)).setChecked(SharedConfig.keepDeletedMediaEnabled));
+        items.add(UItem.asButtonCheck(BUTTON_REPEAT_VIEW_ONCE, getString(R.string.RepeatViewOnceTitle), getString(R.string.RepeatViewOnceInfo)).setChecked(SharedConfig.repeatViewOnceEnabled));
+        items.add(UItem.asButtonCheck(BUTTON_PROTECTED_COPY_SAVE, getString(R.string.ProtectedCopySaveTitle), getString(R.string.ProtectedCopySaveInfo)).setChecked(SharedConfig.protectedContentCopySaveEnabled));
+        items.add(UItem.asButtonCheck(BUTTON_PROTECTED_SEND_COPY, getString(R.string.ProtectedSendCopyTitle), getString(R.string.ProtectedSendCopyInfo)).setChecked(SharedConfig.protectedContentSendCopyEnabled));
+        items.add(UItem.asButtonCheck(BUTTON_DISABLE_FLAG_SECURE, getString(R.string.DisableFlagSecureTitle), getString(R.string.DisableFlagSecureInfo)).setChecked(SharedConfig.disableFlagSecureEnabled));
+        items.add(UItem.asButton(BUTTON_ARCHIVE_RETENTION, getString(R.string.LocalArchiveRetentionTitle), getLocalArchiveRetentionName()));
+        items.add(UItem.asButton(BUTTON_CLEAR_ARCHIVE, getString(R.string.ClearLocalArchiveTitle), getString(R.string.ClearLocalArchiveInfo)));
+        items.add(UItem.asShadow(getString(R.string.PrivacyControlsInfo)));
+
         if (!getMessagesController().premiumFeaturesBlocked()) {
             items.add(SettingCell.Factory.of(11, 0xFFB659FF, 0xFF617CFF, R.drawable.settings_premium, getString(R.string.TelegramPremium)));
         }
@@ -823,6 +843,49 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         showDialog(builder.create());
     }
 
+    private String getLocalArchiveRetentionName() {
+        if (SharedConfig.localArchiveRetentionDays <= 0) {
+            return getString(R.string.LocalArchiveRetentionForever);
+        }
+        return LocaleController.formatString(R.string.LocalArchiveRetentionDays, SharedConfig.localArchiveRetentionDays);
+    }
+
+    private void showLocalArchiveRetentionDialog() {
+        if (getParentActivity() == null) {
+            return;
+        }
+        final int[] values = new int[]{7, 30, 60, 90, 365, 0};
+        CharSequence[] options = new CharSequence[values.length];
+        for (int i = 0; i < values.length; i++) {
+            String option = values[i] == 0 ? getString(R.string.LocalArchiveRetentionForever) : LocaleController.formatString(R.string.LocalArchiveRetentionDays, values[i]);
+            options[i] = SharedConfig.localArchiveRetentionDays == values[i] ? AndroidUtilities.replaceTags("**" + option + "**") : option;
+        }
+        AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity(), resourceProvider);
+        builder.setTitle(getString(R.string.LocalArchiveRetentionTitle));
+        builder.setItems(options, (dialog, which) -> {
+            SharedConfig.setLocalArchiveRetentionDays(values[which]);
+            if (listView != null) {
+                listView.adapter.update(true);
+            }
+        });
+        showDialog(builder.create());
+    }
+
+    private void confirmClearLocalArchive() {
+        if (getParentActivity() == null) {
+            return;
+        }
+        AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity(), resourceProvider);
+        builder.setTitle(getString(R.string.ClearLocalArchiveTitle));
+        builder.setMessage(getString(R.string.ClearLocalArchiveConfirm));
+        builder.setPositiveButton(getString(R.string.Clear), (dialog, which) -> {
+            LocalMessageArchive.getInstance(currentAccount).clear();
+            Toast.makeText(getParentActivity(), getString(R.string.ClearLocalArchiveDone), Toast.LENGTH_SHORT).show();
+        });
+        builder.setNegativeButton(getString(R.string.Cancel), null);
+        showDialog(builder.create());
+    }
+
     private void onClick(UItem item, View view, int position, float x, float y) {
         if (item.object instanceof TLRPC.TL_attachMenuBot) {
             TLRPC.TL_attachMenuBot attachMenuBot = (TLRPC.TL_attachMenuBot) item.object;
@@ -898,6 +961,36 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                 break;
             case BUTTON_DOWNLOAD_SPEED_BOOST:
                 showDownloadSpeedBoostDialog();
+                break;
+            case BUTTON_ANTI_DELETE:
+                SharedConfig.setAntiDeleteEnabled(!SharedConfig.antiDeleteEnabled);
+                listView.adapter.update(true);
+                break;
+            case BUTTON_KEEP_DELETED_MEDIA:
+                SharedConfig.setKeepDeletedMediaEnabled(!SharedConfig.keepDeletedMediaEnabled);
+                listView.adapter.update(true);
+                break;
+            case BUTTON_REPEAT_VIEW_ONCE:
+                SharedConfig.setRepeatViewOnceEnabled(!SharedConfig.repeatViewOnceEnabled);
+                listView.adapter.update(true);
+                break;
+            case BUTTON_PROTECTED_COPY_SAVE:
+                SharedConfig.setProtectedContentCopySaveEnabled(!SharedConfig.protectedContentCopySaveEnabled);
+                listView.adapter.update(true);
+                break;
+            case BUTTON_PROTECTED_SEND_COPY:
+                SharedConfig.setProtectedContentSendCopyEnabled(!SharedConfig.protectedContentSendCopyEnabled);
+                listView.adapter.update(true);
+                break;
+            case BUTTON_DISABLE_FLAG_SECURE:
+                SharedConfig.setDisableFlagSecureEnabled(!SharedConfig.disableFlagSecureEnabled);
+                listView.adapter.update(true);
+                break;
+            case BUTTON_ARCHIVE_RETENTION:
+                showLocalArchiveRetentionDialog();
+                break;
+            case BUTTON_CLEAR_ARCHIVE:
+                confirmClearLocalArchive();
                 break;
 
             case 11:

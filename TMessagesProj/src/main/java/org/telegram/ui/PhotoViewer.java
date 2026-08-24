@@ -183,6 +183,7 @@ import org.telegram.messenger.MessageSuggestionParams;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.NotificationCenter;
+import org.telegram.messenger.PrivacyControls;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SecureDocument;
 import org.telegram.messenger.SendMessagesHelper;
@@ -4673,6 +4674,13 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
         } catch (Exception e) {
             FileLog.e(e);
         }
+    }
+
+    private boolean canSaveOrShareProtected(MessageObject messageObject) {
+        return messageObject != null
+                && !messageObject.hasRevealedExtendedMedia()
+                && PrivacyControls.isProtected(messageObject)
+                && PrivacyControls.canIgnoreNoForwards(PrivacyControls.ProtectedContentAction.SAVE, messageObject);
     }
 
     private void setScaleToFill() {
@@ -14582,7 +14590,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
                     menuItem.hideSubItem(gallery_menu_translate);
                     menuItem.hideSubItem(gallery_menu_hide_translation);
                 }
-                allowShare = !noforwards;
+                allowShare = !noforwards || canSaveOrShareProtected(newMessageObject);
                 if (newMessageObject.isNewGif() && allowShare && !DialogObject.isEncryptedDialog(newMessageObject.getDialogId())) {
                     menuItem.showSubItem(gallery_menu_savegif);
                 }
@@ -14657,7 +14665,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
                 if (!newMessageObject.canDeleteMessage(parentChatActivity != null && parentChatActivity.isInScheduleMode(), null)) {
                     menuItem.hideSubItem(gallery_menu_delete);
                 }
-                allowShare = !noforwards;
+                allowShare = !noforwards || canSaveOrShareProtected(newMessageObject);
             }
             if (newMessageObject.isSponsored()) {
                 if (countView != null) {
@@ -14762,7 +14770,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
             if (DialogObject.isEncryptedDialog(currentDialogId) && !isEmbedVideo || noforwards) {
                 setItemVisible(sendItem, false, false);
             }
-            if (isEmbedVideo || newMessageObject.messageOwner.ttl != 0 && newMessageObject.messageOwner.ttl < 60 * 60 || noforwards) {
+            if (isEmbedVideo || newMessageObject.messageOwner.ttl != 0 && newMessageObject.messageOwner.ttl < 60 * 60 || noforwards && !canSaveOrShareProtected(newMessageObject)) {
                 allowShare = false;
                 galleryButton.setVisibility(View.GONE);
                 galleryGap.setVisibility(View.GONE);
@@ -14844,14 +14852,15 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
                 title = getString(R.string.AttachPhoto);
             }
             final boolean noforwards = avatarsDialogId != 0 && MessagesController.getInstance(currentAccount).isPeerNoForwards(avatarsDialogId);
-            if (noforwards) {
+            final boolean allowProtectedSaveShare = noforwards && PrivacyControls.canIgnoreNoForwards(PrivacyControls.ProtectedContentAction.SAVE, currentAccount, avatarsDialogId);
+            if (noforwards && !allowProtectedSaveShare) {
                 galleryButton.setVisibility(View.GONE);
                 galleryGap.setVisibility(View.GONE);
             } else {
                 galleryButton.setVisibility(View.VISIBLE);
                 galleryGap.setVisibility(View.VISIBLE);
             }
-            allowShare = !noforwards;
+            allowShare = !noforwards || allowProtectedSaveShare;
             menuItem.showSubItem(gallery_menu_share);
             menuItem.checkHideMenuItem();
             groupedPhotosListView.fillList();
@@ -17430,10 +17439,10 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
                 WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR |
                 WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM |
                 WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS;
-            if (chatActivity != null && chatActivity.getCurrentEncryptedChat() != null ||
+            if (!SharedConfig.disableFlagSecureEnabled && (chatActivity != null && chatActivity.getCurrentEncryptedChat() != null ||
                 avatarsDialogId != 0 && MessagesController.getInstance(currentAccount).isPeerNoForwards(avatarsDialogId) ||
                 messageObject != null && (MessagesController.getInstance(currentAccount).isPeerNoForwards(messageObject.getDialogId()) ||
-                (messageObject.messageOwner != null && messageObject.messageOwner.noforwards)) || messageObject != null && messageObject.hasRevealedExtendedMedia()
+                (messageObject.messageOwner != null && messageObject.messageOwner.noforwards)) || messageObject != null && messageObject.hasRevealedExtendedMedia())
             ) {
                 windowLayoutParams.flags |= WindowManager.LayoutParams.FLAG_SECURE;
                 AndroidUtilities.logFlagSecure();

@@ -14630,18 +14630,30 @@ public class MessagesStorage extends BaseController {
                                 }
                             }
                         }
-                        if (!DialogObject.isEncryptedDialog(did) && !deleteFiles && did != currentUser) {
+                        final boolean preserveRemoteDelete = PrivacyControls.shouldKeepDeletedMessage(currentAccount, did, mid, mode);
+                        final boolean inspectViewOnce = SharedConfig.repeatViewOnceEnabled && PrivacyControls.isSupportedDialog(did);
+                        if (!DialogObject.isEncryptedDialog(did) && !deleteFiles && did != currentUser && !preserveRemoteDelete && !inspectViewOnce) {
                             continue;
                         }
                         NativeByteBuffer data = cursor.byteBufferValue(1);
                         if (data != null) {
                             TLRPC.Message message = TLRPC.Message.TLdeserialize(data, data.readInt32(false), false);
                             message.readAttachPath(data, currentUser);
+                            final boolean preserveViewOnce = PrivacyControls.canRepeatViewOnce(did, message);
+                            final boolean preserveLocally = preserveRemoteDelete || preserveViewOnce;
+                            if (!DialogObject.isEncryptedDialog(did) && !deleteFiles && did != currentUser && !preserveLocally) {
+                                data.reuse();
+                                continue;
+                            }
+                            if (preserveLocally) {
+                                LocalMessageArchive.getInstance(currentAccount).archiveMessage(did, message, preserveViewOnce ? LocalMessageArchive.REASON_VIEW_ONCE : LocalMessageArchive.REASON_REMOTE_DELETE);
+                            }
                             if (deletedMessages != null) {
                                 deletedMessages.add(message);
                             }
                             data.reuse();
-                            if (DialogObject.isEncryptedDialog(did) || deleteFiles) {
+                            final boolean keepArchivedMedia = preserveLocally && (SharedConfig.keepDeletedMediaEnabled || preserveViewOnce);
+                            if ((DialogObject.isEncryptedDialog(did) || deleteFiles) && !keepArchivedMedia) {
                                 addFilesToDelete(message, filesToDelete, idsToDelete, namesToDelete, false);
                             }
 
@@ -14683,7 +14695,14 @@ public class MessagesStorage extends BaseController {
                             TLRPC.Message message = TLRPC.Message.TLdeserialize(data, data.readInt32(false), false);
                             message.readAttachPath(data, getUserConfig().clientUserId);
                             data.reuse();
-                            addFilesToDelete(message, filesToDelete, idsToDelete, namesToDelete, false);
+                            final boolean preserveViewOnce = PrivacyControls.canRepeatViewOnce(did, message);
+                            final boolean preserveLocally = PrivacyControls.shouldKeepDeletedMessage(currentAccount, did, mid, mode) || preserveViewOnce;
+                            if (preserveLocally) {
+                                LocalMessageArchive.getInstance(currentAccount).archiveMessage(did, message, preserveViewOnce ? LocalMessageArchive.REASON_VIEW_ONCE : LocalMessageArchive.REASON_REMOTE_DELETE);
+                            }
+                            if (!(preserveLocally && (SharedConfig.keepDeletedMediaEnabled || preserveViewOnce))) {
+                                addFilesToDelete(message, filesToDelete, idsToDelete, namesToDelete, false);
+                            }
                             if (message.action instanceof TLRPC.TL_messageActionTopicCreate) {
                                 if (topicsToDelete == null) {
                                     topicsToDelete = new ArrayList<>();

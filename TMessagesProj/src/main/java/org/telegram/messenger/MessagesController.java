@@ -9324,6 +9324,9 @@ public class MessagesController extends BaseController implements NotificationCe
         if ((messages == null || messages.isEmpty()) && taskId == 0) {
             return;
         }
+        if (taskId == 0 && mode == ChatActivity.MODE_DEFAULT && messages != null) {
+            PrivacyControls.registerLocalDeletion(currentAccount, dialogId, messages);
+        }
         ArrayList<Integer> toSend = null;
         long channelId;
         if (taskId == 0) {
@@ -11956,6 +11959,12 @@ public class MessagesController extends BaseController implements NotificationCe
             ImageLoader.saveMessagesThumbs(messagesRes.messages);
         }
         final boolean isInitialLoading = offset_date == 0 && max_id == 0;
+        final ArrayList<TLRPC.Message> localArchivedMessages;
+        if ((SharedConfig.antiDeleteEnabled || SharedConfig.repeatViewOnceEnabled) && mode == ChatActivity.MODE_DEFAULT && PrivacyControls.isSupportedDialog(dialogId)) {
+            localArchivedMessages = LocalMessageArchive.getInstance(currentAccount).loadMessages(dialogId, messagesRes.messages, max_id, count, threadMessageId);
+        } else {
+            localArchivedMessages = new ArrayList<>();
+        }
         final boolean reload;
         final LongSparseArray<TLRPC.User> usersDict = new LongSparseArray<>();
         final LongSparseArray<TLRPC.Chat> chatsDict = new LongSparseArray<>();
@@ -12039,7 +12048,7 @@ public class MessagesController extends BaseController implements NotificationCe
             }
             final long finalHash = hash;
             AndroidUtilities.runOnUIThread(() -> loadMessagesInternal(dialogId, mergeDialogId, false, count, load_type == LOAD_FROM_UNREAD && queryFromServer ? first_unread : max_id, offset_date, false, 0, classGuid, load_type, last_message_id, mode, threadMessageId, loadIndex, first_unread, unread_count, last_date, queryFromServer, mentionsCount, true, needProcess, isTopic, loaderLogger, finalHash));
-            if (messagesRes.messages.isEmpty()) {
+            if (messagesRes.messages.isEmpty() && localArchivedMessages.isEmpty()) {
                 return;
             }
         }
@@ -12087,6 +12096,9 @@ public class MessagesController extends BaseController implements NotificationCe
             }
         }
 
+        final HashSet<Integer> localArchivedMessageIds = LocalMessageArchive.getInstance(currentAccount).mergeMessages(dialogId, messagesRes.messages, localArchivedMessages);
+        size = messagesRes.messages.size();
+
         if (!needProcess && DialogObject.isEncryptedDialog(dialogId)) {
             AndroidUtilities.runOnUIThread(() -> {
                 getNotificationCenter().postNotificationName(NotificationCenter.messagesDidLoadWithoutProcess, classGuid, messagesRes.messages.size(), isCache, isEnd, last_message_id);
@@ -12100,6 +12112,7 @@ public class MessagesController extends BaseController implements NotificationCe
             final TLRPC.Message message = messagesRes.messages.get(a);
             message.dialog_id = dialogId;
             final MessageObject messageObject = new MessageObject(currentAccount, message, usersDict, chatsDict, true, false, mode == ChatActivity.MODE_SAVED);
+            messageObject.locallyArchivedDeleted = localArchivedMessageIds.contains(message.id);
             messageObject.scheduled = mode == 1;
             objects.add(messageObject);
             if (isCache) {

@@ -165,6 +165,7 @@ import org.telegram.messenger.ImageLocation;
 import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.LanguageDetector;
 import org.telegram.messenger.LiteMode;
+import org.telegram.messenger.LocalMessageArchive;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MediaDataController;
@@ -176,6 +177,7 @@ import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.NotificationsController;
+import org.telegram.messenger.PrivacyControls;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SecretChatHelper;
 import org.telegram.messenger.SendMessagesHelper;
@@ -10335,7 +10337,7 @@ public class ChatActivity extends BaseFragment implements
             actionModeViews.add(actionMode.addItemWithWidth(delete, R.drawable.msg_delete, dp(48), LocaleController.getString(R.string.Delete)));
         }
         actionMode.setItemVisibility(edit, canEditMessagesCount == 1 && selectedMessagesIds[0].size() + selectedMessagesIds[1].size() == 1 ? View.VISIBLE : View.GONE);
-        actionMode.setItemVisibility(copy, !isPeerNoForwards() && selectedMessagesCanCopyIds[0].size() + selectedMessagesCanCopyIds[1].size() != 0 ? View.VISIBLE : View.GONE);
+        actionMode.setItemVisibility(copy, canCopySelectedMessages() ? View.VISIBLE : View.GONE);
         actionMode.setItemVisibility(star, selectedMessagesCanStarIds[0].size() + selectedMessagesCanStarIds[1].size() != 0 ? View.VISIBLE : View.GONE);
         actionMode.setItemVisibility(delete, cantDeleteMessagesCount == 0 ? View.VISIBLE : View.GONE);
         actionMode.setItemVisibility(tag_message, getUserConfig().isPremium() ? View.VISIBLE : View.GONE);
@@ -12182,6 +12184,46 @@ public class ChatActivity extends BaseFragment implements
         return false;
     }
 
+    private boolean canCopySelectedMessages() {
+        for (int i = 0; i < selectedMessagesCanCopyIds.length; i++) {
+            for (int j = 0; j < selectedMessagesCanCopyIds[i].size(); j++) {
+                MessageObject messageObject = selectedMessagesCanCopyIds[i].valueAt(j);
+                if (messageObject != null && (!PrivacyControls.isProtected(messageObject)
+                        || PrivacyControls.canIgnoreNoForwards(PrivacyControls.ProtectedContentAction.COPY, messageObject))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean canSendSelectedProtectedAsCopy() {
+        ArrayList<MessageObject> selected = new ArrayList<>();
+        for (int i = 0; i < selectedMessagesIds.length; i++) {
+            for (int j = 0; j < selectedMessagesIds[i].size(); j++) {
+                MessageObject messageObject = selectedMessagesIds[i].valueAt(j);
+                if (messageObject != null) {
+                    selected.add(messageObject);
+                }
+            }
+        }
+        return shouldSendAsProtectedCopies(selected);
+    }
+
+    private boolean shouldSendAsProtectedCopies(ArrayList<MessageObject> messagesToSend) {
+        boolean hasProtected = false;
+        for (int i = 0; i < messagesToSend.size(); i++) {
+            MessageObject messageObject = messagesToSend.get(i);
+            if (PrivacyControls.isProtected(messageObject)) {
+                hasProtected = true;
+                if (!PrivacyControls.canIgnoreNoForwards(PrivacyControls.ProtectedContentAction.SEND_COPY, messageObject)) {
+                    return false;
+                }
+            }
+        }
+        return hasProtected;
+    }
+
     private void share() {
         MessageObject msg = null;
         for (int a = 1; a >= 0; a--) {
@@ -12229,7 +12271,7 @@ public class ChatActivity extends BaseFragment implements
     }
 
     private void openForward(boolean fromActionBar) {
-        if (isPeerNoForwards() || hasSelectedNoforwardsMessage()) {
+        if ((isPeerNoForwards() || hasSelectedNoforwardsMessage()) && !canSendSelectedProtectedAsCopy()) {
             // We should update text if user changed locale without re-opening chat activity
             String str;
             if (isPeerNoForwards()) {
@@ -13327,7 +13369,8 @@ public class ChatActivity extends BaseFragment implements
     }
 
     private void showTextSelectionHint(MessageObject messageObject) {
-        if (getParentActivity() == null || getMessagesController().isPeerNoForwards(messageObject.getDialogId()) || (messageObject != null && messageObject.messageOwner != null && messageObject.messageOwner.noforwards)) {
+        if (getParentActivity() == null || ((getMessagesController().isPeerNoForwards(messageObject.getDialogId()) || (messageObject != null && messageObject.messageOwner != null && messageObject.messageOwner.noforwards))
+                && !PrivacyControls.canIgnoreNoForwards(PrivacyControls.ProtectedContentAction.COPY, messageObject))) {
             return;
         }
         CharSequence text;
@@ -15578,6 +15621,11 @@ public class ChatActivity extends BaseFragment implements
 
     private Runnable sendSecretMediaDelete(MessageObject messageObject) {
         if (messageObject == null || messageObject.isOut() || !messageObject.isSecretMedia() || messageObject.messageOwner.ttl != 0x7FFFFFFF) {
+            return null;
+        }
+        if (PrivacyControls.canRepeatViewOnce(messageObject)) {
+            messageObject.forceExpired = false;
+            getMessagesStorage().getStorageQueue().postRunnable(() -> LocalMessageArchive.getInstance(currentAccount).archiveMessageObject(messageObject, LocalMessageArchive.REASON_VIEW_ONCE));
             return null;
         }
         final long taskId = getMessagesController().createDeleteShowOnceTask(dialog_id, messageObject.getId());
@@ -19093,7 +19141,7 @@ public class ChatActivity extends BaseFragment implements
             if (selectedMessagesIds[index].indexOfKey(messageObject.getId()) >= 0) {
                 selectedMessagesIds[index].remove(messageObject.getId());
                 if (!isReport()) {
-                    if ((messageObject.type == MessageObject.TYPE_TEXT || messageObject.isAnimatedEmoji() || messageObject.caption != null) && !(messageObject.messageOwner != null && messageObject.messageOwner.noforwards)) {
+                    if ((messageObject.type == MessageObject.TYPE_TEXT || messageObject.isAnimatedEmoji() || messageObject.caption != null) && (!(messageObject.messageOwner != null && messageObject.messageOwner.noforwards) || PrivacyControls.canIgnoreNoForwards(PrivacyControls.ProtectedContentAction.COPY, messageObject))) {
                         selectedMessagesCanCopyIds[index].remove(messageObject.getId());
                     }
                     if (!messageObject.isAnimatedEmoji() && (messageObject.isSticker() || messageObject.isAnimatedSticker()) && MessageObject.isStickerHasSet(messageObject.getDocument())) {
@@ -19105,15 +19153,17 @@ public class ChatActivity extends BaseFragment implements
                     if (!messageObject.canDeleteMessage(chatMode == MODE_SCHEDULED, currentChat)) {
                         cantDeleteMessagesCount--;
                     }
-                    boolean noforwards = isPeerNoForwards();
-                    if (chatMode == MODE_SCHEDULED || !messageObject.canForwardMessage() || noforwards) {
+                    boolean rawNoforwards = isPeerNoForwards() || messageObject.messageOwner != null && messageObject.messageOwner.noforwards;
+                    boolean canSendCopy = rawNoforwards && PrivacyControls.canIgnoreNoForwards(PrivacyControls.ProtectedContentAction.SEND_COPY, messageObject);
+                    boolean noSave = rawNoforwards && !PrivacyControls.canIgnoreNoForwards(PrivacyControls.ProtectedContentAction.SAVE, messageObject);
+                    if (chatMode == MODE_SCHEDULED || !messageObject.canForwardMessage() && !canSendCopy || rawNoforwards && !canSendCopy) {
                         cantForwardMessagesCount--;
                     } else {
                         canForwardMessagesCount--;
                     }
-                    if (messageObject.isMusic() && !noforwards) {
+                    if (messageObject.isMusic() && !noSave) {
                         canSaveMusicCount--;
-                    } else if (messageObject.isDocument() && !noforwards) {
+                    } else if (messageObject.isDocument() && !noSave) {
                         canSaveDocumentsCount--;
                     } else {
                         cantSaveMessagesCount--;
@@ -19130,7 +19180,7 @@ public class ChatActivity extends BaseFragment implements
                 }
                 selectedMessagesIds[index].put(messageObject.getId(), messageObject);
                 if (!isReport()) {
-                    if ((messageObject.type == MessageObject.TYPE_TEXT || messageObject.isAnimatedEmoji() || messageObject.caption != null) && !(messageObject.messageOwner != null && messageObject.messageOwner.noforwards)) {
+                    if ((messageObject.type == MessageObject.TYPE_TEXT || messageObject.isAnimatedEmoji() || messageObject.caption != null) && (!(messageObject.messageOwner != null && messageObject.messageOwner.noforwards) || PrivacyControls.canIgnoreNoForwards(PrivacyControls.ProtectedContentAction.COPY, messageObject))) {
                         selectedMessagesCanCopyIds[index].put(messageObject.getId(), messageObject);
                     }
                     if (!messageObject.isAnimatedEmoji() && (messageObject.isSticker() || messageObject.isAnimatedSticker()) && MessageObject.isStickerHasSet(messageObject.getDocument())) {
@@ -19142,15 +19192,17 @@ public class ChatActivity extends BaseFragment implements
                     if (!messageObject.canDeleteMessage(chatMode == MODE_SCHEDULED, currentChat)) {
                         cantDeleteMessagesCount++;
                     }
-                    boolean noforwards = isPeerNoForwards();
-                    if (chatMode == MODE_SCHEDULED || !messageObject.canForwardMessage() || noforwards) {
+                    boolean rawNoforwards = isPeerNoForwards() || messageObject.messageOwner != null && messageObject.messageOwner.noforwards;
+                    boolean canSendCopy = rawNoforwards && PrivacyControls.canIgnoreNoForwards(PrivacyControls.ProtectedContentAction.SEND_COPY, messageObject);
+                    boolean noSave = rawNoforwards && !PrivacyControls.canIgnoreNoForwards(PrivacyControls.ProtectedContentAction.SAVE, messageObject);
+                    if (chatMode == MODE_SCHEDULED || !messageObject.canForwardMessage() && !canSendCopy || rawNoforwards && !canSendCopy) {
                         cantForwardMessagesCount++;
                     } else {
                         canForwardMessagesCount++;
                     }
-                    if (messageObject.isMusic() && !noforwards) {
+                    if (messageObject.isMusic() && !noSave) {
                         canSaveMusicCount++;
-                    } else if (messageObject.isDocument() && !messageObject.isRoundOnce() && !messageObject.isVoiceOnce() && !noforwards) {
+                    } else if (messageObject.isDocument() && !messageObject.isRoundOnce() && !messageObject.isVoiceOnce() && !noSave) {
                         canSaveDocumentsCount++;
                     } else {
                         cantSaveMessagesCount++;
@@ -19177,7 +19229,7 @@ public class ChatActivity extends BaseFragment implements
                 ActionBarMenuItem tagItem = actionBar.createActionMode().getItem(tag_message);
                 ActionBarMenuItem shareItem = actionBar.createActionMode().getItem(share);
 
-                boolean noforwards = isPeerNoForwards() || hasSelectedNoforwardsMessage();
+                boolean noforwards = (isPeerNoForwards() || hasSelectedNoforwardsMessage()) && !canSendSelectedProtectedAsCopy();
                 if (prevCantForwardCount == 0 && cantForwardMessagesCount != 0 || prevCantForwardCount != 0 && cantForwardMessagesCount == 0) {
                     forwardButtonAnimation = new AnimatorSet();
                     ArrayList<Animator> animators = new ArrayList<>();
@@ -26324,6 +26376,19 @@ public class ChatActivity extends BaseFragment implements
         for (int a = 0; a < size; a++) {
             Integer mid = markAsDeletedMessages.get(a);
             MessageObject obj = chatAdapter != null && chatAdapter.isFiltered ? filteredMessagesDict.get(mid) :  messagesDict[loadIndex].get(mid);
+            final boolean keepViewOnce = obj != null && PrivacyControls.canRepeatViewOnce(obj);
+            final boolean keepRemoteDelete = obj != null && PrivacyControls.shouldKeepDeletedMessage(currentAccount, obj.getDialogId(), mid, chatMode);
+            if (obj != null && chatMode == MODE_DEFAULT && (keepRemoteDelete || keepViewOnce)) {
+                obj.deleted = false;
+                obj.locallyArchivedDeleted = true;
+                final int archiveReason = keepViewOnce ? LocalMessageArchive.REASON_VIEW_ONCE : LocalMessageArchive.REASON_REMOTE_DELETE;
+                getMessagesStorage().getStorageQueue().postRunnable(() -> LocalMessageArchive.getInstance(currentAccount).archiveMessageObject(obj, archiveReason));
+                int preservedIndex = chatAdapter != null && chatAdapter.isFiltered && filteredMessagesDict != null ? chatAdapter.filteredMessages.indexOf(obj) : messages.indexOf(obj);
+                if (chatAdapter != null && preservedIndex >= 0) {
+                    chatAdapter.notifyItemChanged(chatAdapter.messagesStartRow + preservedIndex);
+                }
+                continue;
+            }
             if (selectedObject != null && obj == selectedObject || obj != null && selectedObjectGroup != null && selectedObjectGroup == groupedMessagesMap.get(obj.getGroupId())) {
                 closeMenu();
             }
@@ -30859,7 +30924,8 @@ public class ChatActivity extends BaseFragment implements
             allowPin = false;
         }
         allowPin = allowPin && message.getId() > 0 && (message.messageOwner.action == null || message.messageOwner.action instanceof TLRPC.TL_messageActionEmpty) && !message.isExpiredStory() && message.type != MessageObject.TYPE_STORY_MENTION;
-        boolean noforwards = isPeerNoForwards() || message.messageOwner.noforwards || getDialogId() == UserObject.VERIFY;
+        boolean rawNoforwards = isPeerNoForwards() || message.messageOwner.noforwards || getDialogId() == UserObject.VERIFY;
+        boolean noforwards = rawNoforwards && !PrivacyControls.canIgnoreNoForwards(PrivacyControls.ProtectedContentAction.COPY, message);
         boolean noforwardsOrPaidMedia = noforwards || message.type == MessageObject.TYPE_PAID_MEDIA;
         boolean allowUnpin = message.getDialogId() != mergeDialogId && allowPin && (pinnedMessageObjects.containsKey(message.getId()) || groupedMessages != null && !groupedMessages.messages.isEmpty() && pinnedMessageObjects.containsKey(groupedMessages.messages.get(0).getId())) && !message.isExpiredStory();
         boolean allowEdit = message.canEditMessage(currentChat) && !chatActivityEnterView.hasAudioToSend() && message.getDialogId() != mergeDialogId && message.type != MessageObject.TYPE_STORY && message.type != MessageObject.TYPE_POLL;
@@ -34405,6 +34471,7 @@ public class ChatActivity extends BaseFragment implements
                 }
             }
         }
+        final boolean sendProtectedCopies = shouldSendAsProtectedCopies(fmessages);
         for (int j = 0; j < dids.size(); j++) {
             TLRPC.Chat chat = getMessagesController().getChat(-dids.get(j).dialogId);
             if (chat != null) {
@@ -34418,7 +34485,7 @@ public class ChatActivity extends BaseFragment implements
             }
         }
 
-        if (!fragment.isQuote && (dids.size() > 1 || dids.get(0).dialogId == getUserConfig().getClientUserId() || message != null || scheduleDate != 0 || !notify)) {
+        if (!fragment.isQuote && (sendProtectedCopies || dids.size() > 1 || dids.get(0).dialogId == getUserConfig().getClientUserId() || message != null || scheduleDate != 0 || !notify)) {
             return !AlertsCreator.ensurePaidMessagesMultiConfirmationTopicKeys(currentAccount, dids, fmessages.size() + (TextUtils.isEmpty(message) ? 0 : 1), prices -> {
                 if (fragment.resetDelegate) {
                     fragment.setDelegate(null);
@@ -34451,7 +34518,13 @@ public class ChatActivity extends BaseFragment implements
                         params.suggestionParams = messageSuggestionParams;
                         getSendMessagesHelper().sendMessage(params);
                     }
-                    getSendMessagesHelper().sendMessage(fmessages, did, false, false, notify, scheduleDate, scheduleRepeatPeriod, null, -1, price == null ? 0 : price, getSendMonoForumPeerId(), getSendMessageSuggestionParams());
+                    if (sendProtectedCopies) {
+                        for (int i = 0; i < fmessages.size(); i++) {
+                            getSendMessagesHelper().processForwardFromMyName(fmessages.get(i), did, price == null ? 0 : price, getSendMonoForumPeerId(), getSendMessageSuggestionParams(), notify, scheduleDate, scheduleRepeatPeriod);
+                        }
+                    } else {
+                        getSendMessagesHelper().sendMessage(fmessages, did, false, false, notify, scheduleDate, scheduleRepeatPeriod, null, -1, price == null ? 0 : price, getSendMonoForumPeerId(), getSendMessageSuggestionParams());
+                    }
                 }
                 fragment.finishFragment();
                 createUndoView();
@@ -45717,8 +45790,9 @@ public class ChatActivity extends BaseFragment implements
             allowPin = false;
         }
         allowPin = allowPin && message.getId() > 0 && (message.messageOwner.action == null || message.messageOwner.action instanceof TLRPC.TL_messageActionEmpty) && !message.isExpiredStory() && message.type != MessageObject.TYPE_STORY_MENTION;
-        boolean noforwards = isPeerNoForwards() || message.messageOwner.noforwards || getDialogId() == UserObject.VERIFY;
-        boolean noforwardsOrPaidMedia = noforwards || message.type == MessageObject.TYPE_PAID_MEDIA;
+        boolean rawNoforwards = isPeerNoForwards() || message.messageOwner.noforwards || getDialogId() == UserObject.VERIFY;
+        boolean noforwards = rawNoforwards && !PrivacyControls.canIgnoreNoForwards(PrivacyControls.ProtectedContentAction.SEND_COPY, message);
+        boolean noforwardsOrPaidMedia = rawNoforwards && !PrivacyControls.canIgnoreNoForwards(PrivacyControls.ProtectedContentAction.COPY, message) || message.type == MessageObject.TYPE_PAID_MEDIA;
         boolean allowUnpin = !isEphemeral && message.getDialogId() != mergeDialogId && allowPin && (pinnedMessageObjects.containsKey(message.getId()) || groupedMessages != null && !groupedMessages.messages.isEmpty() && pinnedMessageObjects.containsKey(groupedMessages.messages.get(0).getId())) && !message.isExpiredStory();
         boolean allowEdit = !isEphemeral && message.canEditMessage(currentChat) && !chatActivityEnterView.hasAudioToSend() && message.getDialogId() != mergeDialogId && message.type != MessageObject.TYPE_STORY && message.type != MessageObject.TYPE_POLL;
         if (allowEdit && groupedMessages != null) {
@@ -46163,7 +46237,7 @@ public class ChatActivity extends BaseFragment implements
                     && message.type != MessageObject.TYPE_STORY_MENTION
                     && message.type != MessageObject.TYPE_GIFT_STARS;
                 if (canForward) {
-                    items.add(LocaleController.getString(R.string.Forward));
+                    items.add(LocaleController.getString(rawNoforwards ? R.string.ProtectedSendCopyMenu : R.string.Forward));
                     options.add(OPTION_FORWARD);
                     icons.add(R.drawable.msg_forward);
                 }

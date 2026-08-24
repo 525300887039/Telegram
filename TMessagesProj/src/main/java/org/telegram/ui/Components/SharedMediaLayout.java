@@ -90,6 +90,7 @@ import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.NotificationCenter;
+import org.telegram.messenger.PrivacyControls;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SavedMessagesController;
 import org.telegram.messenger.SendMessagesHelper;
@@ -3896,7 +3897,8 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
         if (forwardItem == null) {
             return;
         }
-        boolean noforwards = profileActivity.getMessagesController().isPeerNoForwards(dialog_id) || hasNoforwardsMessage();
+        boolean noforwards = (profileActivity.getMessagesController().isPeerNoForwards(dialog_id) || hasNoforwardsMessage())
+                && !canSendSelectedProtectedAsCopy();
         forwardItem.setAlpha(noforwards ? 0.5f : 1f);
         if (noforwards && forwardItem.getBackground() != null) {
             forwardItem.setBackground(null);
@@ -3924,6 +3926,33 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
                 break;
         }
         return hasNoforwardsMessage;
+    }
+
+    private boolean canSendSelectedProtectedAsCopy() {
+        ArrayList<MessageObject> selected = new ArrayList<>();
+        for (int a = 1; a >= 0; a--) {
+            for (int b = 0; b < selectedFiles[a].size(); b++) {
+                MessageObject messageObject = selectedFiles[a].valueAt(b);
+                if (messageObject != null) {
+                    selected.add(messageObject);
+                }
+            }
+        }
+        return shouldSendAsProtectedCopies(selected);
+    }
+
+    private boolean shouldSendAsProtectedCopies(ArrayList<MessageObject> messagesToSend) {
+        boolean hasProtected = false;
+        for (int i = 0; i < messagesToSend.size(); i++) {
+            MessageObject messageObject = messagesToSend.get(i);
+            if (PrivacyControls.isProtected(messageObject)) {
+                hasProtected = true;
+                if (!PrivacyControls.canIgnoreNoForwards(PrivacyControls.ProtectedContentAction.SEND_COPY, messageObject)) {
+                    return false;
+                }
+            }
+        }
+        return hasProtected;
     }
 
     private boolean changeTypeAnimation;
@@ -5304,8 +5333,9 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
                 cantDeleteMessagesCount = 0;
             }, null, resourcesProvider);
         } else if (id == forward) {
+            final boolean canSendProtectedCopies = canSendSelectedProtectedAsCopy();
             if (userInfo != null) {
-                if (profileActivity.getMessagesController().isUserNoForwards(userInfo)) {
+                if (profileActivity.getMessagesController().isUserNoForwards(userInfo) && !canSendProtectedCopies) {
                     if (fwdRestrictedHint != null) {
                         fwdRestrictedHint.setText(getString(R.string.ForwardsRestrictedInfoUser));
                         fwdRestrictedHint.showForView(v, true);
@@ -5315,7 +5345,7 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
             }
             if (info != null) {
                 TLRPC.Chat chat = profileActivity.getMessagesController().getChat(info.id);
-                if (profileActivity.getMessagesController().isChatNoForwards(chat)) {
+                if (profileActivity.getMessagesController().isChatNoForwards(chat) && !canSendProtectedCopies) {
                     if (fwdRestrictedHint != null) {
                         fwdRestrictedHint.setText(ChatObject.isChannel(chat) && !chat.megagroup ? getString(R.string.ForwardsRestrictedInfoChannel) :
                                 getString(R.string.ForwardsRestrictedInfoGroup));
@@ -5324,7 +5354,7 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
                     return;
                 }
             }
-            if (hasNoforwardsMessage()) {
+            if (hasNoforwardsMessage() && !canSendProtectedCopies) {
                 if (fwdRestrictedHint != null) {
                     fwdRestrictedHint.setText(getString("ForwardsRestrictedInfoBot", R.string.ForwardsRestrictedInfoBot));
                     fwdRestrictedHint.showForView(v, true);
@@ -5352,20 +5382,27 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
                     }
                     selectedFiles[a].clear();
                 }
+                final boolean sendProtectedCopies = shouldSendAsProtectedCopies(fmessages);
                 cantDeleteMessagesCount = 0;
                 showActionMode(false);
                 if (savedDialogsAdapter != null) {
                     savedDialogsAdapter.unselectAll();
                 }
 
-                if (dids.size() > 1 || dids.get(0).dialogId == profileActivity.getUserConfig().getClientUserId() || message != null) {
+                if (sendProtectedCopies || dids.size() > 1 || dids.get(0).dialogId == profileActivity.getUserConfig().getClientUserId() || message != null || scheduleDate != 0 || !notify) {
                     updateRowsSelection(true);
                     for (int a = 0; a < dids.size(); a++) {
                         long did = dids.get(a).dialogId;
                         if (message != null) {
-                            profileActivity.getSendMessagesHelper().sendMessage(SendMessagesHelper.SendMessageParams.of(message.toString(), did, null, null, null, true, null, null, null, true, 0, 0, null, false));
+                            profileActivity.getSendMessagesHelper().sendMessage(SendMessagesHelper.SendMessageParams.of(message.toString(), did, null, null, null, true, null, null, null, notify, scheduleDate, scheduleRepeatPeriod, null, false));
                         }
-                        profileActivity.getSendMessagesHelper().sendMessage(fmessages, did, false, false, true, 0, 0);
+                        if (sendProtectedCopies) {
+                            for (int i = 0; i < fmessages.size(); i++) {
+                                profileActivity.getSendMessagesHelper().processForwardFromMyName(fmessages.get(i), did, 0, 0, null, notify, scheduleDate, scheduleRepeatPeriod);
+                            }
+                        } else {
+                            profileActivity.getSendMessagesHelper().sendMessage(fmessages, did, false, false, notify, scheduleDate, scheduleRepeatPeriod, null, -1, 0, 0, null);
+                        }
                     }
                     fragment1.finishFragment();
                     UndoView undoView = null;

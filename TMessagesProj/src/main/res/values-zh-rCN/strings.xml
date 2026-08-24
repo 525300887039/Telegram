@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ReactionRankMenu">表情回应排行</string>
+    <string name="ReactionRankTitle">表情回应排行</string>
+    <string name="ReactionRankFilterTitle">排行筛选</string>
+    <string name="ReactionRankRefresh">刷新排行</string>
+    <string name="ReactionRankMessageRange">消息范围</string>
+    <string name="ReactionRankRangeLoaded">已加载消息</string>
+    <string name="ReactionRankRangeToday">今天</string>
+    <string name="ReactionRankRange7Days">最近 7 天</string>
+    <string name="ReactionRankRange30Days">最近 30 天</string>
+    <string name="ReactionRankRange60Days">最近 60 天</string>
+    <string name="ReactionRankRangeCustom">自定义最近天数</string>
+    <string name="ReactionRankCustomDaysHint">输入天数</string>
+    <string name="ReactionRankCustomDaysError">请输入大于 0 的天数</string>
+    <string name="ReactionRankLoadedRangeHint">“已加载消息”不会请求历史。日期范围按本地当天零点计算，并且仅在应用后补拉历史。</string>
+    <string name="ReactionRankReactionFilter">表情回应</string>
+    <string name="ReactionRankAllReactions">全部回应</string>
+    <string name="ReactionRankNoAvailableReactions">当前消息范围内没有发现表情回应。</string>
+    <string name="ReactionRankKeyword">关键词</string>
+    <string name="ReactionRankKeywordHint">可选消息关键词</string>
+    <string name="ReactionRankApply">应用</string>
+    <string name="ReactionRankPaidReaction">⭐ 付费回应</string>
+    <string name="ReactionRankNoResults">没有符合当前回应筛选的消息</string>
+    <string name="ReactionRankLoadFailed">消息历史加载失败</string>
+    <string name="ReactionRankMediaMessage">媒体消息</string>
+    <string name="ReactionRankCellReactions">选中回应 %1$s · 全部回应 %2$s</string>
+    <string name="ReactionRankCellMetadata">浏览 %1$s · 转发 %2$s · %3$s</string>
+    <string name="ReactionRankStatusLoading">%1$s · 正在加载历史… · 已检查 %2$d 条 · 匹配 %3$d 条</string>
+    <string name="ReactionRankStatus">%1$s · 已检查 %2$d 条 · 匹配 %3$d 条 · 显示前 %4$d 条</string>
+    <string name="ReactionRankDays_one">最近 %d 天</string>
+    <string name="ReactionRankDays_other">最近 %d 天</string>
+</resources>

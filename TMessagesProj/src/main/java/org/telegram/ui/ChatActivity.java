@@ -1664,6 +1664,7 @@ public class ChatActivity extends BaseFragment implements
     private final static int text_spoiler = 57;
     private final static int text_quote = 58;
     private final static int text_date = 74;
+    private final static int reaction_rank = 75;
 
     private final static int view_as_topics = 59;
 
@@ -3967,6 +3968,12 @@ public class ChatActivity extends BaseFragment implements
                     getSendMessagesHelper().sendMessage(SendMessagesHelper.SendMessageParams.of("/settings", dialog_id, null, null, null, false, null, null, null, true, 0, 0, null, false));
                 } else if (id == search) {
                     openSearchWithText(isSupportedTags() ? "" : null);
+                } else if (id == reaction_rank) {
+                    if (currentChat != null && ChatObject.isChannelAndNotMegaGroup(currentChat)) {
+                        ChannelReactionRankActivity fragment = new ChannelReactionRankActivity(currentChat.id, new ArrayList<>(messages));
+                        fragment.setCurrentAccount(currentAccount);
+                        presentFragment(fragment);
+                    }
                 } else if (id == translate) {
                     getMessagesController().getTranslateController().setHideTranslateDialog(getDialogId(), false, true);
                     if (!getMessagesController().getTranslateController().toggleTranslatingDialog(getDialogId(), true)) {
@@ -4417,6 +4424,9 @@ public class ChatActivity extends BaseFragment implements
 
             if (searchItem != null) {
                 headerItem.lazilyAddSubItem(search, R.drawable.msg_search, LocaleController.getString(R.string.Search));
+            }
+            if (currentChat != null && ChatObject.isChannelAndNotMegaGroup(currentChat) && !isTopic && chatMode == MODE_DEFAULT) {
+                headerItem.lazilyAddSubItem(reaction_rank, R.drawable.msg_stats, LocaleController.getString(R.string.ReactionRankMenu));
             }
             if (ChatObject.isBoostSupported(currentChat) && (getUserConfig().isPremium() || ChatObject.isBoosted(chatInfo) || ChatObject.hasAdminRights(currentChat))) {
                 RLottieDrawable drawable = new RLottieDrawable(R.raw.boosts, "" + R.raw.boosts, dp(24), dp(24));

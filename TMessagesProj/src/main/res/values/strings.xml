@@ -11221,4 +11221,35 @@
     <string name="UnsupportedMessageTitle">Unsupported Message</string>
     <string name="UnsupportedMessageMessage">Update Telegram to view this message</string>
     <string name="UnsupportedUpdate">Update</string>
+
+    <string name="ReactionRankMenu">Reaction ranking</string>
+    <string name="ReactionRankTitle">Reaction ranking</string>
+    <string name="ReactionRankFilterTitle">Ranking filters</string>
+    <string name="ReactionRankRefresh">Refresh ranking</string>
+    <string name="ReactionRankMessageRange">Message range</string>
+    <string name="ReactionRankRangeLoaded">Loaded messages</string>
+    <string name="ReactionRankRangeToday">Today</string>
+    <string name="ReactionRankRange7Days">Last 7 days</string>
+    <string name="ReactionRankRange30Days">Last 30 days</string>
+    <string name="ReactionRankRange60Days">Last 60 days</string>
+    <string name="ReactionRankRangeCustom">Custom number of days</string>
+    <string name="ReactionRankCustomDaysHint">Number of days</string>
+    <string name="ReactionRankCustomDaysError">Enter a positive number of days</string>
+    <string name="ReactionRankLoadedRangeHint">Loaded messages never request history. Date ranges start at local midnight and load history only after you apply them.</string>
+    <string name="ReactionRankReactionFilter">Reactions</string>
+    <string name="ReactionRankAllReactions">All reactions</string>
+    <string name="ReactionRankNoAvailableReactions">No reactions were found in the current message set.</string>
+    <string name="ReactionRankKeyword">Keyword</string>
+    <string name="ReactionRankKeywordHint">Optional message keyword</string>
+    <string name="ReactionRankApply">Apply</string>
+    <string name="ReactionRankPaidReaction">⭐ Paid reaction</string>
+    <string name="ReactionRankNoResults">No messages match these reaction filters</string>
+    <string name="ReactionRankLoadFailed">Unable to load message history</string>
+    <string name="ReactionRankMediaMessage">Media message</string>
+    <string name="ReactionRankCellReactions">%1$s selected · %2$s total</string>
+    <string name="ReactionRankCellMetadata">%1$s views · %2$s forwards · %3$s</string>
+    <string name="ReactionRankStatusLoading">%1$s · loading history… · %2$d checked · %3$d matched</string>
+    <string name="ReactionRankStatus">%1$s · %2$d checked · %3$d matched · showing Top %4$d</string>
+    <string name="ReactionRankDays_one">Last %d day</string>
+    <string name="ReactionRankDays_other">Last %d days</string>
 </resources>

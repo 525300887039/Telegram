@@ -288,6 +288,8 @@ public class ChannelReactionRankActivity extends BaseFragment implements
         switch (range.type) {
             case TODAY:
                 return LocaleController.getString(R.string.ReactionRankRangeToday);
+            case UNREAD:
+                return LocaleController.getString(R.string.ReactionRankRangeUnread);
             case LAST_7_DAYS:
                 return LocaleController.getString(R.string.ReactionRankRange7Days);
             case LAST_30_DAYS:

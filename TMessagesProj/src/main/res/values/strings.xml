@@ -11262,6 +11262,7 @@
     <string name="ReactionRankRefresh">Refresh ranking</string>
     <string name="ReactionRankMessageRange">Message range</string>
     <string name="ReactionRankRangeLoaded">Loaded messages</string>
+    <string name="ReactionRankRangeUnread">Unread messages</string>
     <string name="ReactionRankRangeToday">Today</string>
     <string name="ReactionRankRange7Days">Last 7 days</string>
     <string name="ReactionRankRange30Days">Last 30 days</string>
@@ -11270,6 +11271,7 @@
     <string name="ReactionRankCustomDaysHint">Number of days</string>
     <string name="ReactionRankCustomDaysError">Enter a positive number of days</string>
     <string name="ReactionRankLoadedRangeHint">Loaded messages never request history. Date ranges start at local midnight and load history only after you apply them.</string>
+    <string name="ReactionRankUnreadRangeHint">Ranks only messages posted after your last read position in this channel. Browsing the chat moves that position forward.</string>
     <string name="ReactionRankReactionFilter">Reactions</string>
     <string name="ReactionRankAllReactions">All reactions</string>
     <string name="ReactionRankNoAvailableReactions">No reactions were found in the current message set.</string>

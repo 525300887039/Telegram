@@ -34,6 +34,9 @@ public class ChannelReactionRankController {
     private static final int PAGE_SIZE = 100;
     private static final int CACHE_LIMIT = 8;
     private static final long CACHE_TTL_MS = 10 * 60 * 1000L;
+    // ponytail: safety cap for the UNREAD range when no read position is known (boundary 0);
+    // a real unread tail is bounded by the read position which is always set for an open chat.
+    private static final int UNREAD_MAX_PAGES = 10;
 
     public enum RangeType {
         LOADED,
@@ -41,7 +44,8 @@ public class ChannelReactionRankController {
         LAST_7_DAYS,
         LAST_30_DAYS,
         LAST_60_DAYS,
-        CUSTOM_DAYS
+        CUSTOM_DAYS,
+        UNREAD
     }
 
     public static final class RangeSpec {
@@ -55,6 +59,10 @@ public class ChannelReactionRankController {
 
         public static RangeSpec loaded() {
             return new RangeSpec(RangeType.LOADED, 0);
+        }
+
+        public static RangeSpec unread() {
+            return new RangeSpec(RangeType.UNREAD, 0);
         }
 
         public static RangeSpec today() {
@@ -82,7 +90,7 @@ public class ChannelReactionRankController {
         }
 
         public int getMinDateSeconds() {
-            if (isLoadedOnly()) {
+            if (isLoadedOnly() || type == RangeType.UNREAD) {
                 return 0;
             }
             return calculateStartDateSeconds(days, System.currentTimeMillis(), TimeZone.getDefault());
@@ -250,6 +258,8 @@ public class ChannelReactionRankController {
     private Delegate delegate;
     private RangeSpec currentRange = RangeSpec.loaded();
     private int activeMinDate;
+    private int activeUnreadMaxId;
+    private int unreadPageFetches;
     private int checkedMessages;
     private int requestId;
     private int requestGeneration;
@@ -290,7 +300,11 @@ public class ChannelReactionRankController {
         resetData();
 
         activeMinDate = range.getMinDateSeconds();
-        seedLoadedMessages(activeMinDate);
+        if (range.type == RangeType.UNREAD) {
+            activeUnreadMaxId = getUnreadBoundaryId();
+            unreadPageFetches = 0;
+        }
+        seedLoadedMessages();
 
         if (range.isLoadedOnly()) {
             loading = false;
@@ -298,7 +312,7 @@ public class ChannelReactionRankController {
             return;
         }
 
-        String cacheKey = getCacheKey(activeMinDate);
+        String cacheKey = currentAccount + ":" + dialogId + (range.type == RangeType.UNREAD ? ":U" + activeUnreadMaxId : ":" + activeMinDate);
         if (!force) {
             CacheEntry cached = getCached(cacheKey);
             if (cached != null) {
@@ -309,7 +323,7 @@ public class ChannelReactionRankController {
                     checkedMessageIds.put(message.messageId, true);
                 }
                 checkedMessages = cached.checkedMessages;
-                seedLoadedMessages(activeMinDate);
+                seedLoadedMessages();
                 loading = false;
                 notifyDataChanged();
                 return;
@@ -318,7 +332,7 @@ public class ChannelReactionRankController {
 
         loading = true;
         notifyDataChanged();
-        loadPage(0, activeMinDate, requestGeneration, cacheKey);
+        loadPage(0, requestGeneration, cacheKey);
     }
 
     public void refresh() {
@@ -332,6 +346,16 @@ public class ChannelReactionRankController {
     public boolean reloadIfDateBoundaryChanged() {
         if (destroyed || currentRange.isLoadedOnly()) {
             return false;
+        }
+        if (currentRange.type == RangeType.UNREAD) {
+            // Reading more of the channel below this screen moves the read position:
+            // reload so those messages leave the unread ranking.
+            int unreadMaxId = getUnreadBoundaryId();
+            if (unreadMaxId == activeUnreadMaxId) {
+                return false;
+            }
+            load(currentRange, false);
+            return true;
         }
         int minDate = currentRange.getMinDateSeconds();
         if (minDate == activeMinDate) {
@@ -404,7 +428,7 @@ public class ChannelReactionRankController {
         }
         if (loadedObject != null && loadedObject != currentObject) {
             MessageObject.updateReactions(loadedObject.messageOwner, reactions);
-            if (isEligible(loadedObject, activeMinDate)) {
+            if (isEligible(loadedObject)) {
                 putMessage(loadedObject, true);
             }
         }
@@ -419,7 +443,7 @@ public class ChannelReactionRankController {
         boolean changed = false;
         for (MessageObject messageObject : messageObjects) {
             putLoadedSnapshot(messageObject);
-            if (isEligible(messageObject, activeMinDate)) {
+            if (isEligible(messageObject)) {
                 changed |= putMessage(messageObject, true);
             }
         }
@@ -450,7 +474,7 @@ public class ChannelReactionRankController {
             // absent from messagesById, so re-add every eligible message from the
             // original loaded snapshot instead of updating only existing ranked rows.
             if (wasLoaded || wasRanked) {
-                if (isEligible(messageObject, activeMinDate)) {
+                if (isEligible(messageObject)) {
                     changed |= putMessage(messageObject, true);
                 } else if (wasRanked) {
                     messagesById.remove(messageId);
@@ -484,7 +508,7 @@ public class ChannelReactionRankController {
         return (int) (calendar.getTimeInMillis() / 1000L);
     }
 
-    private void loadPage(int offsetId, int minDate, int generation, String cacheKey) {
+    private void loadPage(int offsetId, int generation, String cacheKey) {
         if (destroyed || generation != requestGeneration) {
             return;
         }
@@ -520,13 +544,20 @@ public class ChannelReactionRankController {
             int nextOffsetId = 0;
             boolean reachedBoundary = false;
             for (TLRPC.Message message : messages.messages) {
-                if (message == null || message instanceof TLRPC.TL_messageEmpty || message.id <= 0 || message.date <= 0) {
+                if (message == null || message.id <= 0) {
                     continue;
                 }
                 if (nextOffsetId == 0 || message.id < nextOffsetId) {
                     nextOffsetId = message.id;
                 }
-                if (message.date < minDate) {
+                if (currentRange.type == RangeType.UNREAD && message.id <= activeUnreadMaxId) {
+                    reachedBoundary = true;
+                    continue;
+                }
+                if (message instanceof TLRPC.TL_messageEmpty || message.date <= 0) {
+                    continue;
+                }
+                if (message.date < activeMinDate) {
                     reachedBoundary = true;
                     continue;
                 }
@@ -535,27 +566,31 @@ public class ChannelReactionRankController {
                 if (messageObject == null) {
                     messageObject = new MessageObject(currentAccount, message, false, true);
                 }
-                if (isEligible(messageObject, minDate)) {
+                if (isEligible(messageObject)) {
                     putMessage(messageObject, true);
                 }
             }
 
             notifyDataChanged();
-            if (messages.messages.isEmpty() || reachedBoundary || messages.messages.size() < PAGE_SIZE || nextOffsetId <= 0 || nextOffsetId == offsetId) {
+            boolean stopPaging = messages.messages.isEmpty() || reachedBoundary || messages.messages.size() < PAGE_SIZE || nextOffsetId <= 0 || nextOffsetId == offsetId;
+            if (!stopPaging && currentRange.type == RangeType.UNREAD && ++unreadPageFetches >= UNREAD_MAX_PAGES) {
+                stopPaging = true;
+            }
+            if (stopPaging) {
                 loading = false;
                 putCached(cacheKey);
                 notifyDataChanged();
             } else {
-                loadPage(nextOffsetId, minDate, generation, cacheKey);
+                loadPage(nextOffsetId, generation, cacheKey);
             }
         }));
         ConnectionsManager.getInstance(currentAccount).bindRequestToGuid(requestId, classGuid);
     }
 
-    private void seedLoadedMessages(int minDate) {
+    private void seedLoadedMessages() {
         for (int i = 0; i < loadedSnapshotById.size(); i++) {
             MessageObject messageObject = loadedSnapshotById.valueAt(i);
-            if (isEligible(messageObject, minDate)) {
+            if (isEligible(messageObject)) {
                 putMessage(messageObject, true);
             }
         }
@@ -580,14 +615,35 @@ public class ChannelReactionRankController {
         return changed;
     }
 
-    private boolean isEligible(MessageObject messageObject, int minDate) {
+    private boolean isEligible(MessageObject messageObject) {
         if (messageObject == null || messageObject.messageOwner == null || messageObject.isDateObject || messageObject.getId() <= 0) {
             return false;
         }
         if (messageObject.getDialogId() != dialogId || messageObject.messageOwner.action != null) {
             return false;
         }
-        return minDate == 0 || messageObject.messageOwner.date >= minDate;
+        if (currentRange.type == RangeType.UNREAD) {
+            return messageObject.getId() > activeUnreadMaxId;
+        }
+        return activeMinDate == 0 || messageObject.messageOwner.date >= activeMinDate;
+    }
+
+    /**
+     * The id of the newest message already read by me in this dialog. The app keeps this in
+     * {@link MessagesController#dialogs_read_inbox_max} (the same map ChatActivity reads from),
+     * with the server-synced dialog value as a fallback.
+     */
+    private int getUnreadBoundaryId() {
+        MessagesController messagesController = MessagesController.getInstance(currentAccount);
+        Integer readMax = messagesController.dialogs_read_inbox_max.get(dialogId);
+        if (readMax != null && readMax > 0) {
+            return readMax;
+        }
+        TLRPC.Dialog dialog = messagesController.dialogs_dict.get(dialogId);
+        if (dialog != null && dialog.read_inbox_max_id > 0) {
+            return dialog.read_inbox_max_id;
+        }
+        return 0;
     }
 
     private void resetData() {
@@ -616,10 +672,6 @@ public class ChannelReactionRankController {
         if (delegate != null) {
             delegate.onDataChanged(checkedMessages, loading);
         }
-    }
-
-    private String getCacheKey(int minDate) {
-        return currentAccount + ":" + dialogId + ":" + minDate;
     }
 
     private CacheEntry getCached(String key) {

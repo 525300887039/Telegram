@@ -49,6 +49,7 @@ public class ReactionRankFilterBottomSheet extends BottomSheet {
     private final EditTextSettingsCell customDaysCell;
     private final EditTextSettingsCell keywordCell;
     private final TextCheckCell allReactionsCell;
+    private final TextView unreadRangeHint;
     private ChannelReactionRankController.RangeSpec selectedRange;
 
     public ReactionRankFilterBottomSheet(
@@ -87,6 +88,7 @@ public class ReactionRankFilterBottomSheet extends BottomSheet {
 
         int customDays = selectedRange.type == ChannelReactionRankController.RangeType.CUSTOM_DAYS ? selectedRange.days : 7;
         addRangeOption(context, content, ChannelReactionRankController.RangeSpec.loaded(), R.string.ReactionRankRangeLoaded, resourcesProvider);
+        addRangeOption(context, content, ChannelReactionRankController.RangeSpec.unread(), R.string.ReactionRankRangeUnread, resourcesProvider);
         addRangeOption(context, content, ChannelReactionRankController.RangeSpec.today(), R.string.ReactionRankRangeToday, resourcesProvider);
         addRangeOption(context, content, ChannelReactionRankController.RangeSpec.last7Days(), R.string.ReactionRankRange7Days, resourcesProvider);
         addRangeOption(context, content, ChannelReactionRankController.RangeSpec.last30Days(), R.string.ReactionRankRange30Days, resourcesProvider);
@@ -100,6 +102,9 @@ public class ReactionRankFilterBottomSheet extends BottomSheet {
 
         TextView rangeHint = createHint(context, LocaleController.getString(R.string.ReactionRankLoadedRangeHint), resourcesProvider);
         content.addView(rangeHint, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+
+        unreadRangeHint = createHint(context, LocaleController.getString(R.string.ReactionRankUnreadRangeHint), resourcesProvider);
+        content.addView(unreadRangeHint, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
 
         content.addView(createSectionHeader(context, LocaleController.getString(R.string.ReactionRankReactionFilter), resourcesProvider));
 
@@ -204,6 +209,7 @@ public class ReactionRankFilterBottomSheet extends BottomSheet {
         if (customDaysCell != null) {
             customDaysCell.setVisibility(selectedRange.type == ChannelReactionRankController.RangeType.CUSTOM_DAYS ? View.VISIBLE : View.GONE);
         }
+        unreadRangeHint.setVisibility(selectedRange.type == ChannelReactionRankController.RangeType.UNREAD ? View.VISIBLE : View.GONE);
     }
 
     private void updateReactionCells() {

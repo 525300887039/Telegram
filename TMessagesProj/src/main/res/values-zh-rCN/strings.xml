@@ -39,6 +39,7 @@
     <string name="ReactionRankRefresh">刷新排行</string>
     <string name="ReactionRankMessageRange">消息范围</string>
     <string name="ReactionRankRangeLoaded">已加载消息</string>
+    <string name="ReactionRankRangeUnread">未读消息</string>
     <string name="ReactionRankRangeToday">今天</string>
     <string name="ReactionRankRange7Days">最近 7 天</string>
     <string name="ReactionRankRange30Days">最近 30 天</string>
@@ -47,6 +48,7 @@
     <string name="ReactionRankCustomDaysHint">输入天数</string>
     <string name="ReactionRankCustomDaysError">请输入大于 0 的天数</string>
     <string name="ReactionRankLoadedRangeHint">“已加载消息”不会请求历史。日期范围按本地当天零点计算，并且仅在应用后补拉历史。</string>
+    <string name="ReactionRankUnreadRangeHint">只排行本频道内位于你已读位置之后、尚未读到的消息。浏览频道会把已看部分视为已读并从排行中移除。</string>
     <string name="ReactionRankReactionFilter">表情回应</string>
     <string name="ReactionRankAllReactions">全部回应</string>
     <string name="ReactionRankNoAvailableReactions">当前消息范围内没有发现表情回应。</string>

@@ -11239,7 +11239,7 @@
     <string name="KeepDeletedMediaTitle">Keep revoked media</string>
     <string name="KeepDeletedMediaInfo">Copy already downloaded media to the app-private archive when its message is revoked.</string>
     <string name="RepeatViewOnceTitle">Replay view-once media</string>
-    <string name="RepeatViewOnceInfo">Keep incoming view-once photos, videos, voice messages, and round videos available on this device after the first view.</string>
+    <string name="RepeatViewOnceInfo">Keep incoming view-once photos, videos, voice messages, and round videos available after the first view, with options to save or send them as a copy.</string>
     <string name="ProtectedCopySaveTitle">Copy and save protected content</string>
     <string name="ProtectedCopySaveInfo">Expose local copy and save actions for ordinary protected cloud-chat content.</string>
     <string name="ProtectedSendCopyTitle">Send protected content as a copy</string>

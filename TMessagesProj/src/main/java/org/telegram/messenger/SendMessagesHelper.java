@@ -1779,17 +1779,33 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
     }
 
     public void processForwardFromMyName(MessageObject messageObject, long did, long payStars, long monoForumPeerId, MessageSuggestionParams suggestionParams, boolean notify, int scheduleDate, int scheduleRepeatPeriod) {
+        processForwardFromMyName(messageObject, did, payStars, monoForumPeerId, suggestionParams, notify, scheduleDate, scheduleRepeatPeriod, true);
+    }
+
+    private void processForwardFromMyName(MessageObject messageObject, long did, long payStars, long monoForumPeerId, MessageSuggestionParams suggestionParams, boolean notify, int scheduleDate, int scheduleRepeatPeriod, boolean canDownload) {
         if (messageObject == null) {
             return;
         }
-        final boolean protectedCopy = PrivacyControls.isProtected(messageObject)
-                && PrivacyControls.canIgnoreNoForwards(PrivacyControls.ProtectedContentAction.SEND_COPY, messageObject);
+        final boolean protectedCopy = PrivacyControls.shouldSendAsCopy(messageObject);
         String protectedCopyPath = null;
         if (protectedCopy && messageObject.messageOwner.media != null
                 && (messageObject.messageOwner.media.photo instanceof TLRPC.TL_photo || messageObject.messageOwner.media.document instanceof TLRPC.TL_document)) {
             protectedCopyPath = resolveProtectedCopyPath(messageObject);
             if (protectedCopyPath == null) {
-                requestProtectedCopyDownload(messageObject, did, payStars, monoForumPeerId, suggestionParams, notify, scheduleDate, scheduleRepeatPeriod);
+                if (PrivacyControls.canRepeatViewOnce(messageObject)) {
+                    LocalMessageArchive.getInstance(currentAccount).prepareMediaForExport(messageObject, file -> {
+                        if (!PrivacyControls.canRepeatViewOnce(messageObject)) {
+                            return;
+                        }
+                        if (file != null) {
+                            processForwardFromMyName(messageObject, did, payStars, monoForumPeerId, suggestionParams, notify, scheduleDate, scheduleRepeatPeriod, false);
+                        } else if (canDownload) {
+                            requestProtectedCopyDownload(messageObject, did, payStars, monoForumPeerId, suggestionParams, notify, scheduleDate, scheduleRepeatPeriod);
+                        }
+                    });
+                } else if (canDownload) {
+                    requestProtectedCopyDownload(messageObject, did, payStars, monoForumPeerId, suggestionParams, notify, scheduleDate, scheduleRepeatPeriod);
+                }
                 return;
             }
         }
@@ -1884,12 +1900,14 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
     private String resolveProtectedCopyPath(MessageObject messageObject) {
         if (messageObject.messageOwner.attachPath != null && !messageObject.messageOwner.attachPath.isEmpty()) {
             File file = new File(messageObject.messageOwner.attachPath);
-            if (file.exists() && file.isFile()) {
+            if (file.exists() && file.isFile() && file.length() > 0 && !file.getName().endsWith(".enc")
+                    && (!PrivacyControls.canRepeatViewOnce(messageObject) || !AndroidUtilities.isInternalUri(Uri.fromFile(file)))) {
                 return file.getAbsolutePath();
             }
         }
         File file = getFileLoader().getPathToMessage(messageObject.messageOwner);
-        if (file != null && file.exists() && file.isFile()) {
+        if (file != null && file.exists() && file.isFile() && file.length() > 0 && !file.getName().endsWith(".enc")
+                && (!PrivacyControls.canRepeatViewOnce(messageObject) || !AndroidUtilities.isInternalUri(Uri.fromFile(file)))) {
             return file.getAbsolutePath();
         }
         return null;
@@ -1931,7 +1949,9 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
             @Override
             public void onSuccessDownload(String fileName) {
                 removeSelf();
-                processForwardFromMyName(messageObject, did, payStars, monoForumPeerId, suggestionParams, notify, scheduleDate, scheduleRepeatPeriod);
+                if (PrivacyControls.shouldSendAsCopy(messageObject)) {
+                    processForwardFromMyName(messageObject, did, payStars, monoForumPeerId, suggestionParams, notify, scheduleDate, scheduleRepeatPeriod, false);
+                }
             }
 
             @Override

@@ -6,12 +6,14 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 
+import org.telegram.messenger.secretmedia.EncryptedFileInputStream;
 import org.telegram.tgnet.SerializedData;
 import org.telegram.tgnet.TLRPC;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashSet;
 
@@ -82,15 +84,40 @@ public final class LocalMessageArchive extends SQLiteOpenHelper {
             values.put("reason", reason);
             values.put("data", data);
             synchronized (databaseLock) {
-                getWritableDatabase().insertWithOnConflict("archived_messages", null, values, SQLiteDatabase.CONFLICT_REPLACE);
+                SQLiteDatabase database = getWritableDatabase();
+                int updated = database.update("archived_messages", values, "dialog_id = ? AND mid = ?", new String[]{String.valueOf(dialogId), String.valueOf(message.id)});
+                if (updated == 0) {
+                    database.insert("archived_messages", null, values);
+                }
             }
             if (SharedConfig.keepDeletedMediaEnabled || reason == REASON_VIEW_ONCE) {
-                archiveMediaAsync(dialogId, message);
+                archiveMediaAsync(dialogId, message, reason == REASON_VIEW_ONCE);
             }
             cleanupExpiredAsync();
         } catch (Exception e) {
             FileLog.e(e);
         }
+    }
+
+    public void prepareMediaForExport(MessageObject messageObject, Utilities.Callback<File> callback) {
+        if (callback == null) {
+            return;
+        }
+        if (!PrivacyControls.canRepeatViewOnce(messageObject)) {
+            AndroidUtilities.runOnUIThread(() -> callback.run(null));
+            return;
+        }
+        Utilities.globalQueue.postRunnable(() -> {
+            File file = null;
+            try {
+                archiveMessageObject(messageObject, REASON_VIEW_ONCE);
+                file = archiveMedia(messageObject.getDialogId(), messageObject.messageOwner, true);
+            } catch (Exception e) {
+                FileLog.e(e);
+            }
+            final File result = file;
+            AndroidUtilities.runOnUIThread(() -> callback.run(result));
+        });
     }
 
     public ArrayList<TLRPC.Message> loadMessages(long dialogId, ArrayList<TLRPC.Message> loadedMessages, int maxId, int count, long threadMessageId) {
@@ -194,11 +221,11 @@ public final class LocalMessageArchive extends SQLiteOpenHelper {
 
     public void clear() {
         Utilities.globalQueue.postRunnable(() -> {
-            ArrayList<String> paths = collectMediaPaths(0);
             synchronized (databaseLock) {
+                ArrayList<String> paths = collectMediaPaths(0);
                 getWritableDatabase().delete("archived_messages", null, null);
+                deleteFiles(paths);
             }
-            deleteFiles(paths);
         });
     }
 
@@ -209,65 +236,211 @@ public final class LocalMessageArchive extends SQLiteOpenHelper {
                 return;
             }
             long threshold = System.currentTimeMillis() - retentionDays * 24L * 60L * 60L * 1000L;
-            ArrayList<String> paths = collectMediaPaths(threshold);
             synchronized (databaseLock) {
+                ArrayList<String> paths = collectMediaPaths(threshold);
                 getWritableDatabase().delete("archived_messages", "deleted_at < ?", new String[]{String.valueOf(threshold)});
+                deleteFiles(paths);
             }
-            deleteFiles(paths);
         });
     }
 
-    private void archiveMediaAsync(long dialogId, TLRPC.Message message) {
+    private void archiveMediaAsync(long dialogId, TLRPC.Message message, boolean exportable) {
         Utilities.globalQueue.postRunnable(() -> {
             try {
-                File source = resolveMediaFile(message);
-                if (source == null || !source.exists() || !source.isFile()) {
-                    return;
-                }
-                File directory = new File(ApplicationLoader.applicationContext.getFilesDir(), "privacy_archive/account_" + currentAccount);
-                if (!directory.exists() && !directory.mkdirs()) {
-                    return;
-                }
-                String suffix = source.getName().contains(".") ? source.getName().substring(source.getName().lastIndexOf('.')) : ".bin";
-                File target = new File(directory, dialogId + "_" + message.id + suffix);
-                copyFile(source, target);
-                ContentValues values = new ContentValues();
-                values.put("media_path", target.getAbsolutePath());
-                synchronized (databaseLock) {
-                    getWritableDatabase().update("archived_messages", values, "dialog_id = ? AND mid = ?", new String[]{String.valueOf(dialogId), String.valueOf(message.id)});
-                }
+                archiveMedia(dialogId, message, exportable);
             } catch (Exception e) {
                 FileLog.e(e);
             }
         });
     }
 
-    private File resolveMediaFile(TLRPC.Message message) {
+    private File archiveMedia(long dialogId, TLRPC.Message message, boolean exportable) throws Exception {
+        File source = resolveMediaFile(message, exportable);
+        if (source == null) {
+            return null;
+        }
+        File root = exportable ? ApplicationLoader.applicationContext.getExternalFilesDir(null) : ApplicationLoader.applicationContext.getFilesDir();
+        if (root == null) {
+            return null;
+        }
+        File directory = new File(root, "privacy_archive/account_" + currentAccount);
+        if (!directory.exists() && !directory.mkdirs()) {
+            return null;
+        }
+        String previousPath = message.attachPath;
+        String suffix = exportable ? archiveSuffix(source, message) : source.getName().contains(".") ? source.getName().substring(source.getName().lastIndexOf('.')) : ".bin";
+        File target = new File(directory, dialogId + "_" + message.id + suffix);
+        boolean sameFile = source.getCanonicalFile().equals(target.getCanonicalFile());
+        if (!sameFile) {
+            File temporary = new File(target.getAbsolutePath() + ".tmp");
+            try {
+                if (exportable && source.getName().endsWith(".enc")) {
+                    try (InputStream input = new EncryptedFileInputStream(source, encryptionKeyFor(source, message))) {
+                        copyFile(input, temporary);
+                    }
+                } else {
+                    try (InputStream input = new FileInputStream(source)) {
+                        copyFile(input, temporary);
+                    }
+                }
+                if (target.exists() && !target.delete()) {
+                    return null;
+                }
+                if (!temporary.renameTo(target)) {
+                    try (InputStream input = new FileInputStream(temporary)) {
+                        copyFile(input, target);
+                    } catch (Exception e) {
+                        target.delete();
+                        throw e;
+                    }
+                }
+            } finally {
+                if (temporary.exists() && !temporary.delete()) {
+                    FileLog.d("Unable to delete temporary local archive file " + temporary);
+                }
+            }
+        }
+        ContentValues values = new ContentValues();
+        values.put("media_path", target.getAbsolutePath());
+        final int updated;
+        synchronized (databaseLock) {
+            updated = getWritableDatabase().update("archived_messages", values, "dialog_id = ? AND mid = ?", new String[]{String.valueOf(dialogId), String.valueOf(message.id)});
+        }
+        if (updated == 0) {
+            if (target.exists() && !target.delete()) {
+                FileLog.d("Unable to delete untracked local archive file " + target);
+            }
+            return null;
+        }
+        message.attachPath = target.getAbsolutePath();
+        deleteReplacedArchive(previousPath, target);
+        return target;
+    }
+
+    static String archiveSuffix(String sourceName) {
+        String plainName = sourceName.endsWith(".enc") ? sourceName.substring(0, sourceName.length() - 4) : sourceName;
+        int extensionStart = plainName.lastIndexOf('.');
+        return extensionStart >= 0 ? plainName.substring(extensionStart) : ".bin";
+    }
+
+    private String archiveSuffix(File source, TLRPC.Message message) {
+        String suffix = archiveSuffix(source.getName());
+        if (!".bin".equals(suffix)) {
+            return suffix;
+        }
+        File original = getOriginalEncryptedPath(message);
+        return original == null ? suffix : archiveSuffix(original.getName());
+    }
+
+    private File resolveMediaFile(TLRPC.Message message, boolean exportable) {
+        File attached = null;
         if (message.attachPath != null && !message.attachPath.isEmpty()) {
-            File file = new File(message.attachPath);
-            if (file.exists()) {
-                return file;
+            attached = new File(message.attachPath);
+            if ((!exportable || !attached.getName().endsWith(".enc")) && isUsableMediaSource(attached, exportable, message)) {
+                return attached;
             }
         }
         File file = FileLoader.getInstance(currentAccount).getPathToMessage(message);
-        if (file.exists()) {
+        if (isUsableMediaSource(file, exportable, message)) {
             return file;
         }
-        File encrypted = new File(file.getAbsolutePath() + ".enc");
-        return encrypted.exists() ? encrypted : null;
+        File encrypted = file == null ? null : new File(file.getAbsolutePath() + ".enc");
+        if (isUsableMediaSource(encrypted, exportable, message)) {
+            return encrypted;
+        }
+        if (exportable) {
+            File originalEncrypted = getOriginalEncryptedPath(message);
+            if (isUsableMediaSource(originalEncrypted, true, message)) {
+                return originalEncrypted;
+            }
+        }
+        return isUsableMediaSource(attached, exportable, message) ? attached : null;
+    }
+
+    private File getOriginalEncryptedPath(TLRPC.Message message) {
+        TLRPC.MessageMedia media = MessageObject.getMedia(message);
+        if (media == null) {
+            return null;
+        }
+        File plain;
+        if (media.document != null) {
+            plain = FileLoader.getInstance(currentAccount).getPathToAttach(media.document, null, true, true);
+        } else if (media.photo != null) {
+            TLRPC.PhotoSize size = FileLoader.getClosestPhotoSizeWithSize(media.photo.sizes, AndroidUtilities.getPhotoSize(true), false, null, true);
+            plain = size == null ? null : FileLoader.getInstance(currentAccount).getPathToAttach(size, null, true, true);
+        } else {
+            plain = null;
+        }
+        if (plain == null || plain.getPath().isEmpty()) {
+            return null;
+        }
+        return plain.getName().endsWith(".enc") ? plain : new File(plain.getAbsolutePath() + ".enc");
+    }
+
+    private boolean isUsableMediaSource(File file, boolean requireKey, TLRPC.Message message) {
+        if (file == null || !file.exists() || !file.isFile() || file.length() == 0) {
+            return false;
+        }
+        if (requireKey) {
+            long expectedSize = expectedMediaSize(message);
+            if (expectedSize > 0 && file.length() < expectedSize) {
+                return false;
+            }
+        }
+        if (!requireKey || !file.getName().endsWith(".enc")) {
+            return true;
+        }
+        long keyLength = encryptionKeyFor(file, message).length();
+        return keyLength > 0 && keyLength % 48 == 0;
+    }
+
+    private long expectedMediaSize(TLRPC.Message message) {
+        TLRPC.MessageMedia media = MessageObject.getMedia(message);
+        if (media == null) {
+            return 0;
+        }
+        if (media.document != null) {
+            return media.document.size;
+        }
+        if (media.photo != null) {
+            TLRPC.PhotoSize size = FileLoader.getClosestPhotoSizeWithSize(media.photo.sizes, AndroidUtilities.getPhotoSize(true), false, null, true);
+            return size == null ? 0 : size.size;
+        }
+        return 0;
+    }
+
+    private File encryptionKeyFor(File encrypted, TLRPC.Message message) {
+        File direct = new File(FileLoader.getInternalCacheDir(), encrypted.getName() + ".key");
+        if (direct.length() > 0 && direct.length() % 48 == 0) {
+            return direct;
+        }
+        File original = getOriginalEncryptedPath(message);
+        return original == null ? direct : new File(FileLoader.getInternalCacheDir(), original.getName() + ".key");
+    }
+
+    private void deleteReplacedArchive(String path, File replacement) {
+        if (path == null || path.isEmpty()) {
+            return;
+        }
+        File file = new File(path);
+        File internalDirectory = new File(ApplicationLoader.applicationContext.getFilesDir(), "privacy_archive/account_" + currentAccount);
+        File externalRoot = ApplicationLoader.applicationContext.getExternalFilesDir(null);
+        File externalDirectory = externalRoot == null ? null : new File(externalRoot, "privacy_archive/account_" + currentAccount);
+        boolean managed = internalDirectory.equals(file.getParentFile()) || externalDirectory != null && externalDirectory.equals(file.getParentFile());
+        if (managed && !file.equals(replacement) && file.exists() && !file.delete()) {
+            FileLog.d("Unable to delete replaced local archive file " + file);
+        }
     }
 
     private ArrayList<String> collectMediaPaths(long before) {
         ArrayList<String> result = new ArrayList<>();
         Cursor cursor = null;
         try {
-            synchronized (databaseLock) {
-                String selection = before > 0 ? "deleted_at < ? AND media_path IS NOT NULL" : "media_path IS NOT NULL";
-                String[] args = before > 0 ? new String[]{String.valueOf(before)} : null;
-                cursor = getReadableDatabase().query("archived_messages", new String[]{"media_path"}, selection, args, null, null, null);
-                while (cursor.moveToNext()) {
-                    result.add(cursor.getString(0));
-                }
+            String selection = before > 0 ? "deleted_at < ? AND media_path IS NOT NULL" : "media_path IS NOT NULL";
+            String[] args = before > 0 ? new String[]{String.valueOf(before)} : null;
+            cursor = getReadableDatabase().query("archived_messages", new String[]{"media_path"}, selection, args, null, null, null);
+            while (cursor.moveToNext()) {
+                result.add(cursor.getString(0));
             }
         } catch (Exception e) {
             FileLog.e(e);
@@ -292,8 +465,8 @@ public final class LocalMessageArchive extends SQLiteOpenHelper {
         }
     }
 
-    private static void copyFile(File source, File target) throws Exception {
-        try (FileInputStream input = new FileInputStream(source); FileOutputStream output = new FileOutputStream(target)) {
+    private static void copyFile(InputStream input, File target) throws Exception {
+        try (FileOutputStream output = new FileOutputStream(target)) {
             byte[] buffer = new byte[64 * 1024];
             int read;
             while ((read = input.read(buffer)) != -1) {

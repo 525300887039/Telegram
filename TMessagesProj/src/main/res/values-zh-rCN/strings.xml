@@ -17,7 +17,7 @@
     <string name="KeepDeletedMediaTitle">保留已撤回媒体</string>
     <string name="KeepDeletedMediaInfo">消息被撤回时，将已经下载的媒体复制到应用私有归档。</string>
     <string name="RepeatViewOnceTitle">重复查看一次性媒体</string>
-    <string name="RepeatViewOnceInfo">首次查看后，仍可在本机重复打开收到的一次性照片、视频、语音和圆视频。</string>
+    <string name="RepeatViewOnceInfo">首次查看后，仍可重复打开收到的一次性照片、视频、语音和圆视频，并可保存到本地或作为副本发送。</string>
     <string name="ProtectedCopySaveTitle">复制和保存受保护内容</string>
     <string name="ProtectedCopySaveInfo">为普通云聊天中的受保护内容显示本地复制与保存操作。</string>
     <string name="ProtectedSendCopyTitle">将受保护内容作为副本发送</string>

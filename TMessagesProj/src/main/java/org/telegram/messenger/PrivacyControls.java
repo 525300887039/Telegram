@@ -71,6 +71,7 @@ public final class PrivacyControls {
         }
         return !(message instanceof TLRPC.TL_message_secret)
                 && isSupportedDialog(dialogId)
+                && dialogId != UserObject.VERIFY
                 && !message.out
                 && message.media != null
                 && message.media.ttl_seconds == 0x7FFFFFFF
@@ -95,6 +96,12 @@ public final class PrivacyControls {
             return SharedConfig.protectedContentSendCopyEnabled;
         }
         return SharedConfig.protectedContentCopySaveEnabled;
+    }
+
+    public static boolean shouldSendAsCopy(MessageObject messageObject) {
+        return canRepeatViewOnce(messageObject)
+                || isProtected(messageObject)
+                && canIgnoreNoForwards(ProtectedContentAction.SEND_COPY, messageObject);
     }
 
     public static boolean isProtected(MessageObject messageObject) {
